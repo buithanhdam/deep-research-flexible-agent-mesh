@@ -11,6 +11,7 @@ from src.memory.models import AgentExecution
 from src.logger import get_logger
 from src.constants import CONFIDENCE_MEDIUM
 from src.config import config
+from src.tools.base_tool import BaseTool
 
 logger = get_logger(__name__)
 
@@ -18,16 +19,19 @@ logger = get_logger(__name__)
 class BaseAgent(ABC):
     """Base class for all agents."""
     
-    def __init__(self, name: str):
+    def __init__(self, name: str, tools: Optional[List[BaseTool]] = None):
         """Initialize base agent.
         
         Args:
             name: Agent name/identifier
+            tools: List of tools available to this agent
         """
         self.name = name
         self.llm = get_client()
         self.memory = get_memory_manager()
         self.logger = get_logger(f"agent.{name}")
+        self.tools = tools or []
+        self._tool_map = {tool.name: tool for tool in self.tools}
     
     @abstractmethod
     def get_system_prompt(self) -> str:
@@ -59,25 +63,37 @@ class BaseAgent(ABC):
         self,
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
-        json_mode: bool = False
+        json_mode: bool = False,
+        tools: Optional[List[Dict]] = None
     ) -> str:
-        """Call LLM with messages.
+        """Call LLM with messages and optional tools.
         
         Args:
             messages: List of message dicts
             temperature: Sampling temperature
             json_mode: Whether to request JSON response
+            tools: Tool definitions for function calling
         
         Returns:
             LLM response content
         """
         try:
-            response = self.llm.chat(
-                messages=messages,
-                temperature=temperature,
-                json_mode=json_mode
-            )
-            return response
+            if tools:
+                # Use function calling
+                response = self.llm.chat_completion(
+                    messages=messages,
+                    temperature=temperature,
+                    tools=tools
+                )
+                return response
+            else:
+                # Regular chat
+                response = self.llm.chat(
+                    messages=messages,
+                    temperature=temperature,
+                    json_mode=json_mode
+                )
+                return response
         except Exception as e:
             self.logger.error("llm_call_failed", error=str(e))
             raise
@@ -300,6 +316,125 @@ class BaseAgent(ABC):
                 params=params,
                 ttl_hours=24
             )
+    
+    def _execute_tool_calls(self, tool_calls: List[Dict]) -> List[Dict]:
+        """Execute tool calls from LLM.
+        
+        Args:
+            tool_calls: List of tool call dicts
+        
+        Returns:
+            List of tool results
+        """
+        results = []
+        
+        for tool_call in tool_calls:
+            function_name = tool_call.get("function", {}).get("name")
+            arguments = tool_call.get("function", {}).get("arguments", "{}")
+            
+            if function_name not in self._tool_map:
+                self.logger.warning("tool_not_found", tool=function_name)
+                results.append({
+                    "tool": function_name,
+                    "success": False,
+                    "error": f"Tool {function_name} not available"
+                })
+                continue
+            
+            tool = self._tool_map[function_name]
+            
+            try:
+                # Parse arguments
+                import json
+                args = json.loads(arguments) if isinstance(arguments, str) else arguments
+                
+                # Execute tool
+                self.logger.info("executing_tool", tool=function_name, args=args)
+                result = tool.execute(**args)
+                
+                results.append({
+                    "tool": function_name,
+                    "success": result.success,
+                    "result": result.result,
+                    "error": result.error
+                })
+                
+            except Exception as e:
+                self.logger.error("tool_execution_failed", tool=function_name, error=str(e))
+                results.append({
+                    "tool": function_name,
+                    "success": False,
+                    "error": str(e)
+                })
+        
+        return results
+    
+    def _process_with_tools(
+        self,
+        messages: List[Dict[str, str]],
+        max_iterations: int = 5
+    ) -> Dict[str, Any]:
+        """Process task with tool calling loop.
+        
+        Args:
+            messages: Initial messages
+            max_iterations: Max tool calling iterations
+        
+        Returns:
+            Final result dict
+        """
+        # Get tool definitions
+        tool_definitions = [tool.to_function_definition() for tool in self.tools]
+        
+        current_messages = messages.copy()
+        
+        for iteration in range(max_iterations):
+            self.logger.debug("tool_calling_iteration", iteration=iteration + 1)
+            
+            # Call LLM with tools
+            response = self._call_llm(
+                current_messages,
+                temperature=0.3,
+                tools=tool_definitions
+            )
+            
+            # Check if LLM wants to call tools
+            choices = response.get("choices", [])
+            if not choices:
+                break
+            
+            message = choices[0].get("message", {})
+            tool_calls = message.get("tool_calls")
+            
+            if not tool_calls:
+                # No more tool calls, return content
+                content = message.get("content", "")
+                return {
+                    "content": content,
+                    "iterations": iteration + 1
+                }
+            
+            # Execute tools
+            tool_results = self._execute_tool_calls(tool_calls)
+            
+            # Add assistant message
+            current_messages.append(message)
+            
+            # Add tool results as messages
+            for i, (tool_call, tool_result) in enumerate(zip(tool_calls, tool_results)):
+                current_messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.get("id", f"call_{i}"),
+                    "name": tool_result["tool"],
+                    "content": json.dumps(tool_result)
+                })
+        
+        # Max iterations reached
+        return {
+            "content": "Max tool calling iterations reached",
+            "iterations": max_iterations,
+            "stopped": "max_iterations"
+        }
     
     def format_messages(
         self,

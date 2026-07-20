@@ -6,6 +6,7 @@ AGENT_ORCHESTRATOR = "orchestrator"
 AGENT_RESEARCH = "research"
 AGENT_DATA = "data"
 AGENT_NOTIFICATION = "notification"
+AGENT_ARCHITECT = "architect"
 
 # Sub-agent Names
 SUB_AGENT_LARK = "lark_research"

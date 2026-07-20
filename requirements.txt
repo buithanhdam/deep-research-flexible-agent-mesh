@@ -1,23 +1,39 @@
 # Core dependencies
 python-dotenv==1.0.0
-pydantic==2.5.0
+pydantic>=2.5.0,<3.0.0
 
 # LLM & AI
-openai==1.7.0  # For OpenRouter API compatibility (design spec: OpenRouter only, không cần anthropic SDK riêng)
+tiktoken>=0.7.0
+openai>=1.7.0,<2.0.0  # OpenRouter API compatible
 
 # Database
-supabase==2.4.5  # bản >=2.4.x cho phép httpx<0.28,>=0.24 — tránh conflict với openai/httpx
+supabase>=2.4.5,<3.0.0  # Hỗ trợ httpx flex range
 psycopg2-binary==2.9.9
 sqlalchemy==2.0.23
 
 # HTTP & API
 requests==2.31.0
-httpx>=0.24.0,<0.28.0  # bỏ ghim cứng để pip tự chọn bản tương thích với supabase + openai
+httpx>=0.24.0,<0.28.0  # Tránh conflict giữa supabase & openai
 
 # Web scraping & tools
 beautifulsoup4==4.12.2
 lxml==4.9.3
+tavily-python>=0.5.0   # Sửa triệt để lỗi xung đột tiktoken
+duckduckgo-search>=5.0.0
+
+# Document generation
+markdown==3.5.1
+weasyprint==60.2       # Yêu cầu hệ thống cài sẵn cairo, pango
+pypandoc==1.12         # Yêu cầu hệ thống cài sẵn pandoc binary
+graphviz==0.20.1       # Yêu cầu hệ thống cài sẵn graphviz binary
+pypdf>=4.0.0           # Thay thế PyPDF2 đã deprecated
+python-docx==1.1.0
+
+# Google Drive
+google-auth==2.25.2
+google-auth-oauthlib==1.2.0
+google-api-python-client==2.110.0
 
 # Logging & utilities
 structlog==23.2.0
-tenacity==8.2.3  # For retry logic
+tenacity==8.2.3

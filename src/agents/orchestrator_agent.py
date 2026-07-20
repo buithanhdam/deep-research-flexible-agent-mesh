@@ -5,7 +5,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.agents.base_agent import BaseAgent
-from src.prompt_templates import get_orchestrator_prompt
+from src.prompt_templates.orchestrator_prompt import get_orchestrator_prompt
 from src.constants import AGENT_ORCHESTRATOR, CONFIDENCE_HIGH
 
 
@@ -40,7 +40,7 @@ class OrchestratorAgent(BaseAgent):
         task: str,
         context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Process task by coordinating multiple agents.
+        """Process task with multi-round orchestration.
         
         Args:
             task: Task description
@@ -50,221 +50,224 @@ class OrchestratorAgent(BaseAgent):
             Dict with orchestration result
         """
         workflow_id = context.get("workflow_id") if context else None
+        max_rounds = 3  # Prevent infinite loops
+        all_results = []
         
-        # Step 1: Analyze and decompose task
-        decomposition = self._decompose_task(task, context)
+        for round_num in range(max_rounds):
+            self.logger.info("orchestration_round", round=round_num + 1, max=max_rounds)
+            
+            # Step 1: Decide next action based on current state
+            decision = self._decide_next_action(task, all_results, context)
+            
+            if not decision.get("success"):
+                return decision
+            
+            action = decision.get("action")
+            
+            # If complete, finalize
+            if action == "complete":
+                self.logger.info("task_complete", round=round_num + 1)
+                return self._finalize_results(task, all_results, context)
+            
+            # If escalate, return for human review
+            if action == "escalate":
+                self.logger.info("task_escalated", round=round_num + 1)
+                return {
+                    "success": False,
+                    "action": "escalate",
+                    "reason": decision.get("reason", "Task too complex"),
+                    "confidence": decision.get("confidence", 0.0),
+                    "partial_results": all_results
+                }
+            
+            # Otherwise, execute next agent
+            next_agent = decision.get("next_agent")
+            next_task = decision.get("next_task")
+            
+            if not next_agent or next_agent not in self._agent_registry:
+                self.logger.error("invalid_next_agent", agent=next_agent)
+                break
+            
+            # Execute agent
+            agent_result = self._execute_agent(
+                next_agent,
+                next_task,
+                workflow_id,
+                context
+            )
+            
+            all_results.append({
+                "round": round_num + 1,
+                "agent": next_agent,
+                "task": next_task,
+                **agent_result
+            })
+            
+            # Store in working memory
+            if workflow_id:
+                self.memory.set_context(
+                    workflow_id,
+                    f"round_{round_num}_result",
+                    agent_result
+                )
         
-        if not decomposition.get("success"):
-            return decomposition
-        
-        sub_tasks = decomposition.get("sub_tasks", [])
-        
-        if not sub_tasks:
-            return {
-                "success": False,
-                "error": "No sub-tasks generated",
-                "confidence": 0.0
-            }
-        
-        # Step 2: Execute sub-tasks (parallel where possible)
-        results = self._execute_sub_tasks(sub_tasks, workflow_id, context)
-        
-        # Step 3: Synthesize results
-        synthesis = self._synthesize_results(task, results, context)
-        
-        return synthesis
+        # Max rounds reached
+        self.logger.warning("max_rounds_reached")
+        return self._finalize_results(task, all_results, context)
     
-    def _decompose_task(
+    def _decide_next_action(
         self,
-        task: str,
+        original_task: str,
+        current_results: List[Dict[str, Any]],
         context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Decompose task into sub-tasks.
+        """Decide next action based on current state.
         
         Args:
-            task: Task description
+            original_task: Original task
+            current_results: Results so far
             context: Additional context
         
         Returns:
-            Dict with sub_tasks list
+            Decision dict with action and next steps
         """
-        prompt = f"""Analyze this task and create a decomposition plan:
+        results_summary = json.dumps(current_results, indent=2) if current_results else "No results yet"
+        
+        prompt = f"""You are orchestrating a multi-agent workflow. Decide the next action.
 
-Task: {task}
+Original Task: {original_task}
 
-Respond with JSON in this format:
+Current Results:
+{results_summary}
+
+Available Agents:
+- research: Find information, search web, gather data
+- data: Process and analyze data
+- notification: Format messages and notifications
+
+Respond with JSON:
 {{
-  "task_type": "research|data|integration|build",
-  "sub_tasks": [
-    {{
-      "agent": "research|data|notification",
-      "task": "specific task description",
-      "priority": "high|medium|low"
-    }}
-  ]
+  "action": "execute_agent|complete|escalate",
+  "next_agent": "research|data|notification" (if action=execute_agent),
+  "next_task": "specific task for that agent" (if action=execute_agent),
+  "reason": "why this decision",
+  "confidence": 0.0-1.0,
+  "assessment": {{
+    "is_complete": true|false,
+    "missing_info": ["what's still needed"],
+    "quality": "high|medium|low"
+  }}
 }}
+
+Rules:
+- If no results yet: execute_agent to start
+- If results are sufficient and high quality: complete
+- If results are low confidence or missing critical info: execute_agent or escalate
+- If stuck or too complex: escalate
 """
         
         messages = self.format_messages(prompt, context)
         
         try:
-            response = self._call_llm(messages, temperature=0.5, json_mode=True)
-            result = self._parse_json_response(response)
+            response = self._call_llm(messages, temperature=0.3, json_mode=True)
+            decision = self._parse_json_response(response)
             
             return {
                 "success": True,
-                "sub_tasks": result.get("sub_tasks", []),
-                "task_type": result.get("task_type", "unknown")
+                **decision
             }
             
         except Exception as e:
-            self.logger.error("decomposition_failed", error=str(e))
+            self.logger.error("decision_failed", error=str(e))
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    def _execute_agent(
+        self,
+        agent_name: str,
+        task: str,
+        workflow_id: Optional[str] = None,
+        context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Execute single agent.
+        
+        Args:
+            agent_name: Agent to execute
+            task: Task for agent
+            workflow_id: Workflow ID
+            context: Context
+        
+        Returns:
+            Agent result
+        """
+        agent = self._agent_registry[agent_name]
+        
+        # Build context
+        agent_context = {}
+        if context and "session_id" in context:
+            agent_context["session_id"] = context["session_id"]
+        
+        try:
+            result = agent.execute(
+                task=task,
+                workflow_id=workflow_id,
+                context=agent_context
+            )
+            
+            # Store in working memory
+            if workflow_id:
+                self.memory.set_context(
+                    workflow_id,
+                    f"{agent_name}_last_result",
+                    result
+                )
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error("agent_execution_failed", agent=agent_name, error=str(e))
             return {
                 "success": False,
                 "error": str(e),
-                "sub_tasks": []
+                "confidence": 0.0
             }
     
-    def _execute_sub_tasks(
-        self,
-        sub_tasks: List[Dict[str, Any]],
-        workflow_id: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None
-    ) -> List[Dict[str, Any]]:
-        """Execute sub-tasks using registered agents with shared context.
-        
-        Args:
-            sub_tasks: List of sub-task dicts
-            workflow_id: Optional workflow ID
-            context: Shared context from parent
-        
-        Returns:
-            List of results
-        """
-        results = []
-        
-        # Simple sequential execution for MVP
-        # TODO: Implement parallel execution for independent tasks
-        for i, sub_task in enumerate(sub_tasks):
-            agent_name = sub_task.get("agent")
-            task_desc = sub_task.get("task")
-            
-            if agent_name not in self._agent_registry:
-                self.logger.warning("agent_not_found", agent=agent_name)
-                results.append({
-                    "agent": agent_name,
-                    "success": False,
-                    "error": f"Agent '{agent_name}' not registered"
-                })
-                continue
-            
-            agent = self._agent_registry[agent_name]
-            
-            # Build context for sub-agent
-            sub_context = {
-                "priority": sub_task.get("priority", "medium"),
-                "sub_task_index": i,
-                "total_sub_tasks": len(sub_tasks)
-            }
-            
-            # Inherit session_id from parent if exists
-            if context and "session_id" in context:
-                sub_context["session_id"] = context["session_id"]
-            
-            # Share previous results via working memory
-            if workflow_id and results:
-                # Store previous results in working memory
-                self.memory.set_context(
-                    workflow_id,
-                    f"previous_results_{i}",
-                    results
-                )
-                sub_context["previous_results_available"] = True
-            
-            try:
-                result = agent.execute(
-                    task=task_desc,
-                    workflow_id=workflow_id,
-                    context=sub_context
-                )
-                
-                # Store this result in working memory for next agent
-                if workflow_id:
-                    self.memory.set_context(
-                        workflow_id,
-                        f"{agent_name}_result",
-                        result
-                    )
-                
-                results.append({
-                    "agent": agent_name,
-                    "task": task_desc,
-                    **result
-                })
-                
-            except Exception as e:
-                self.logger.error(
-                    "sub_task_failed",
-                    agent=agent_name,
-                    error=str(e)
-                )
-                results.append({
-                    "agent": agent_name,
-                    "task": task_desc,
-                    "success": False,
-                    "error": str(e)
-                })
-        
-        return results
-    
-    def _synthesize_results(
+    def _finalize_results(
         self,
         original_task: str,
-        results: List[Dict[str, Any]],
+        all_results: List[Dict[str, Any]],
         context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Synthesize results from multiple agents.
+        """Finalize and synthesize all results.
         
         Args:
-            original_task: Original task description
-            results: List of agent results
-            context: Additional context
+            original_task: Original task
+            all_results: All agent results from all rounds
+            context: Context
         
         Returns:
-            Final synthesized result
+            Final result
         """
-        # Calculate overall confidence
-        confidences = [r.get("confidence", 0.0) for r in results if r.get("success")]
-        avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+        results_summary = json.dumps(all_results, indent=2)
         
-        # Check if all sub-tasks succeeded
-        all_success = all(r.get("success", False) for r in results)
-        
-        # Prepare synthesis prompt
-        results_summary = json.dumps(results, indent=2)
-        
-        prompt = f"""Synthesize the results from multiple agents into a final response.
+        prompt = f"""Synthesize final results from multi-round orchestration.
 
 Original Task: {original_task}
 
-Agent Results:
+All Agent Results (chronological):
 {results_summary}
 
-Provide a JSON response with:
+Provide JSON:
 {{
-  "action": "return|escalate",
-  "confidence": 0.0-1.0,
-  "reason": "explanation of decision",
-  "summary": "brief summary of findings",
+  "summary": "brief summary",
   "details": "comprehensive details",
-  "sources": ["list of sources"],
-  "next_steps": ["recommended actions if any"]
+  "sources": ["sources"],
+  "confidence": 0.0-1.0,
+  "completeness": "complete|partial|insufficient",
+  "recommendations": ["next steps or recommendations"]
 }}
-
-Rules:
-- If confidence < 0.7 or critical info missing: action = "escalate"
-- Otherwise: action = "return"
-- Be honest about limitations
 """
         
         messages = self.format_messages(prompt, context)
@@ -273,28 +276,31 @@ Rules:
             response = self._call_llm(messages, temperature=0.3, json_mode=True)
             synthesis = self._parse_json_response(response)
             
+            # Calculate success
+            successful_rounds = [r for r in all_results if r.get("success")]
+            success_rate = len(successful_rounds) / len(all_results) if all_results else 0.0
+            
             return {
-                "success": all_success,
-                "action": synthesis.get("action", "escalate"),
-                "confidence": synthesis.get("confidence", avg_confidence),
+                "success": success_rate > 0.5,
+                "action": "return",
+                "confidence": synthesis.get("confidence", 0.7),
                 "result": {
                     "summary": synthesis.get("summary", ""),
                     "details": synthesis.get("details", ""),
                     "sources": synthesis.get("sources", []),
-                    "next_steps": synthesis.get("next_steps", [])
+                    "recommendations": synthesis.get("recommendations", [])
                 },
-                "reason": synthesis.get("reason", ""),
-                "agent_results": results
+                "completeness": synthesis.get("completeness", "partial"),
+                "agent_results": all_results,
+                "rounds_executed": len(all_results)
             }
             
         except Exception as e:
-            self.logger.error("synthesis_failed", error=str(e))
-            
-            # Return safe fallback
+            self.logger.error("finalization_failed", error=str(e))
             return {
                 "success": False,
                 "action": "escalate",
                 "confidence": 0.0,
                 "error": str(e),
-                "agent_results": results
+                "agent_results": all_results
             }

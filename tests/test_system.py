@@ -44,6 +44,9 @@ def test_imports():
         from src.memory.memory_manager import MemoryManager
         print("✓ Memory manager imported")
         
+        import src.tools
+        print("✓ Tools imported")
+        
         print("\n✅ All imports successful!")
         return True
         

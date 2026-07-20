@@ -29,6 +29,7 @@ class Config:
     # Lark Integration (optional)
     LARK_APP_ID: Optional[str] = os.environ.get("LARK_APP_ID")
     LARK_APP_SECRET: Optional[str] = os.environ.get("LARK_APP_SECRET")
+    LARK_ERROR_CHAT_ID: Optional[str] = os.environ.get("LARK_ERROR_CHAT_ID")  # Chat ID for error notifications
     
     # Agent Configuration
     MAX_RETRIES: int = int(os.environ.get("MAX_RETRIES", "3"))
@@ -47,6 +48,15 @@ class Config:
     AUTO_CLEANUP_ENABLED: bool = os.environ.get("AUTO_CLEANUP_ENABLED", "false").lower() == "true"
     AUTO_CLEANUP_INTERVAL_HOURS: int = int(os.environ.get("AUTO_CLEANUP_INTERVAL_HOURS", "24"))
     AUTO_CLEANUP_RETENTION_DAYS: int = int(os.environ.get("AUTO_CLEANUP_RETENTION_DAYS", "30"))
+    
+    # Search API Configuration
+    TAVILY_API_KEY: str = os.environ.get("TAVILY_API_KEY", "")
+    
+    # Google Drive Configuration
+    GOOGLE_DRIVE_ENABLED: bool = os.environ.get("GOOGLE_DRIVE_ENABLED", "false").lower() == "true"
+    GOOGLE_DRIVE_CREDENTIALS_JSON: Optional[str] = os.environ.get("GOOGLE_DRIVE_CREDENTIALS_JSON")
+    GOOGLE_DRIVE_CREDENTIALS: Optional[str] = os.environ.get("GOOGLE_DRIVE_CREDENTIALS")
+    GOOGLE_DRIVE_FOLDER_ID: Optional[str] = os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
     @property
     def POSTGRES_DSN(self) -> str:
         """Tự build DSN từ các phần rời, tự động URL-encode user/password.

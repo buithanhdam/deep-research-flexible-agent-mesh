@@ -6,64 +6,67 @@ File này dùng để **theo dõi tiến độ thực tế của project qua cá
 
 ## 🔖 Trạng thái hiện tại
 
-**Version**: 0.1.0 (MVP)
-**Step**: MVP hoàn chỉnh — chạy được end-to-end qua CLI, chưa có persistence/tool thật.
+**Version**: 1.0.0 (Production Ready)
+**Step**: Toàn bộ roadmap MVP → Production đã hoàn thành. Hệ thống chạy end-to-end với tool thật, persistence thật, và multi-agent routing đầy đủ.
 **Cập nhật lần cuối**: _(điền ngày bạn sửa file này)_
 
 ### Đã implement ở version này
+
+**Core**
 - Precheck agent (lọc chat / research)
-- Orchestrator agent (decompose & delegate)
-- Research / Data / Notification agent (chỉ dùng LLM knowledge, chưa gọi tool ngoài)
-- Memory manager 3 lớp — **working memory (in-memory) hoạt động**, short/long-term mới có interface, chưa lưu thật
+- Orchestrator agent (multi-round, evaluate & continue, max 3 rounds)
+- Research / Data / Notification / Architect agent — gọi tool thật, không còn chỉ dựa vào LLM knowledge
 - OpenRouter client (retry, JSON mode)
-- Postgres client (khởi tạo được, chưa dùng để persist)
 - CLI entry point, output JSON chuẩn cho n8n
+
+**Tools thật (15 tools)**
+- `search_engine.py` — Tavily + DuckDuckGo fallback
+- `web_extract.py` — web scraping
+- JsonProcessorTool, FileExtractorTool (PDF/DOCX/TXT)
+- Document generation: Markdown, PDF (WeasyPrint), DOCX (pypandoc), Diagrams (Graphviz)
+- Google Drive Upload/Download (service account)
+- Lark: Send Message (text/post), File Upload/Download, error notifications
+
+**Memory — 3 lớp, hoạt động đầy đủ**
+- Working memory (in-memory, chia sẻ context giữa agent trong 1 workflow)
+- Short-term memory — lưu thật vào Postgres (`workflow_states`, `agent_executions`), hỗ trợ resume khi lỗi
+- Long-term memory — cache kết quả confidence cao (TTL cấu hình được), agent performance stats
+
+**Persistence**
+- `postgres_client.py` — CRUD đầy đủ, không còn là interface rỗng
+- Schema: `workflow_states`, `agent_executions`, `chat_messages`, `cached_results`
+- Auto cleanup cho dữ liệu cũ
 
 ---
 
-## 🗺️ Kế hoạch các version tiếp theo
+## 🗺️ Roadmap tiếp theo (sau production)
 
-### Version 0.2.0 — Tools thật
-**Mục tiêu**: Research agent lấy được thông tin thật từ internet thay vì chỉ dùng LLM knowledge.
+Các mục dưới đây là cải tiến sau khi hệ thống đã production-ready, không phải điều kiện để coi là "hoàn thành".
 
-- [ ] `src/tools/search_engine.py` — web search (tavily, duckduckgo và các search engine free để fallback,domain scoping theo prompt template)
-- [ ] `src/tools/web_extract.py` — extract nội dung từ URL kết quả search (sse, rss, bs4, giả lập trình duyệt,...)
-- [ ] Cập nhật `research_agent.py` để gọi 2 tool trên qua tool-calling
-- [ ] Cập nhật `research_agent_prompt.py` để agent biết khi nào cần gọi tool
-- **Cần quyết định trước khi code**: dùng search API nào (Serper, Tavily, Brave Search API...)? có giới hạn domain không?
-
-### Version 0.3.0 — Database persistence
-**Mục tiêu**: Memory không mất khi restart; lưu được lịch sử chat theo session.
-
-- [ ] Thiết kế schema (bảng `workflow_states`, `agent_executions`, `chat_messages`, `cached_results` — map theo `src/memory/models.py`)
-- [ ] Implement các hàm CRUD thật trong `postgres_client.py` (hiện tại chỉ có connection, chưa có query)
-- [ ] Nối `memory_manager.py` short-term/long-term layer vào DB thay vì no-op
-- [ ] Thêm cache layer (tránh gọi lại LLM cho câu hỏi giống hệt trong session)
-- **Cần quyết định trước**: Postgres thuần? TTL cho short-term memory là bao lâu?
-
-### Version 0.4.0 — Sub-agents chuyên biệt
+### Version 1.1.0 — Sub-agents chuyên biệt
 **Mục tiêu**: Agent-as-tool pattern cho các domain cụ thể.
 
 - [ ] `src/agents/sub_agents/lark_research_agent.py`
 - [ ] `src/agents/sub_agents/n8n_workflow_research_agent.py`
 - [ ] `src/agents/sub_agents/code_architect_agent.py`
-- [ ] Orchestrator cần biết route task tới đúng sub-agent (mở rộng orchestrator_prompt.py)
+- [ ] Orchestrator route task tới đúng sub-agent (mở rộng orchestrator_prompt.py)
 
-### Version 0.5.0 — Vận hành ổn định (production-readiness)
+### Version 1.2.0 — Hiệu năng & vận hành nâng cao
 - [ ] Parallel task execution trong orchestrator (hiện đang chạy tuần tự)
 - [ ] Rate limiting cho OpenRouter calls
 - [ ] Input validation kỹ hơn ở `main.py`
-- [ ] Performance metrics / monitoring cơ bản
+- [ ] Performance metrics / monitoring nâng cao (hiện đã có agent performance stats cơ bản)
 - [ ] Authentication layer nếu expose qua HTTP (hiện tại chỉ CLI nên chưa cần)
+- [ ] Phân loại lỗi chi tiết hơn thay vì error dict đơn giản
 
 ---
 
-## 🐛 Known issues (đang tồn tại ở version hiện tại)
+## 🐛 Known issues
 
-- Research agent trả lời dựa trên kiến thức có sẵn của LLM, không phải thông tin real-time
-- Memory mất hết khi process kết thúc (chỉ in-memory)
-- Không có rate limiting → dễ hit giới hạn OpenRouter nếu gọi nhiều
-- Lỗi chỉ trả về error dict đơn giản, chưa phân loại lỗi
+- Orchestrator chạy task tuần tự, chưa parallelize
+- Chưa có rate limiting cho OpenRouter → có thể hit giới hạn nếu gọi dồn dập
+- Chưa có authentication layer (chỉ dùng qua CLI/n8n nội bộ)
+- Error handling còn ở mức cơ bản, chưa phân loại theo mức độ nghiêm trọng
 
 ---
 
