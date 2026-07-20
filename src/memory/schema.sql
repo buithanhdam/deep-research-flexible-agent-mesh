@@ -17,8 +17,9 @@ CREATE TABLE IF NOT EXISTS chat_history (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_chat_history_session ON chat_history(session_id, timestamp DESC);
-CREATE INDEX idx_chat_history_created ON chat_history(created_at);
+CREATE INDEX IF NOT EXISTS idx_chat_history_session ON chat_history(session_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_chat_history_created ON chat_history(created_at);
+
 
 -- ============================================
 -- Workflow States Table
@@ -33,9 +34,10 @@ CREATE TABLE IF NOT EXISTS workflow_states (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_workflow_states_id ON workflow_states(workflow_id);
-CREATE INDEX idx_workflow_states_status ON workflow_states(status);
-CREATE INDEX idx_workflow_states_created ON workflow_states(created_at);
+CREATE INDEX IF NOT EXISTS idx_workflow_states_id ON workflow_states(workflow_id);
+CREATE INDEX IF NOT EXISTS idx_workflow_states_status ON workflow_states(status);
+CREATE INDEX IF NOT EXISTS idx_workflow_states_created ON workflow_states(created_at);
+
 
 -- ============================================
 -- Agent Executions Table
@@ -56,9 +58,10 @@ CREATE TABLE IF NOT EXISTS agent_executions (
     FOREIGN KEY (workflow_id) REFERENCES workflow_states(workflow_id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_agent_executions_workflow ON agent_executions(workflow_id, started_at DESC);
-CREATE INDEX idx_agent_executions_agent ON agent_executions(agent_name);
-CREATE INDEX idx_agent_executions_started ON agent_executions(started_at);
+CREATE INDEX IF NOT EXISTS idx_agent_executions_workflow ON agent_executions(workflow_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_agent_executions_agent ON agent_executions(agent_name);
+CREATE INDEX IF NOT EXISTS idx_agent_executions_started ON agent_executions(started_at);
+
 
 -- ============================================
 -- Cached Results Table
@@ -78,10 +81,10 @@ CREATE TABLE IF NOT EXISTS cached_results (
     last_hit_at TIMESTAMPTZ
 );
 
-CREATE INDEX idx_cached_results_key ON cached_results(cache_key);
-CREATE INDEX idx_cached_results_agent ON cached_results(agent_name);
-CREATE INDEX idx_cached_results_expires ON cached_results(expires_at);
-CREATE INDEX idx_cached_results_task_hash ON cached_results(task_hash);
+CREATE INDEX IF NOT EXISTS idx_cached_results_key ON cached_results(cache_key);
+CREATE INDEX IF NOT EXISTS idx_cached_results_agent ON cached_results(agent_name);
+CREATE INDEX IF NOT EXISTS idx_cached_results_expires ON cached_results(expires_at);
+CREATE INDEX IF NOT EXISTS idx_cached_results_task_hash ON cached_results(task_hash);
 
 -- ============================================
 -- Auto-update timestamp trigger
@@ -94,6 +97,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS update_workflow_states_updated_at ON workflow_states;
 CREATE TRIGGER update_workflow_states_updated_at
     BEFORE UPDATE ON workflow_states
     FOR EACH ROW

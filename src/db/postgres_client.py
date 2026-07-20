@@ -82,6 +82,20 @@ class PostgresClient:
                     return [dict(row) for row in results]
                 
                 return None
+    def execute_script(self, sql_script: str) -> None:
+        """Execute a multi-statement SQL script as a single command.
+        
+        Unlike execute_query, this does NOT split the script or bind
+        parameters — it sends the whole script to Postgres as-is, so
+        constructs like $$ ... $$ function bodies (which contain their
+        own semicolons) are handled correctly.
+        
+        Args:
+            sql_script: Raw SQL script, potentially with multiple statements
+        """
+        with self.get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql_script)
     
     def execute_many(
         self,

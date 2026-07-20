@@ -659,12 +659,9 @@ class MemoryManager:
             with open(schema_path, 'r') as f:
                 schema_sql = f.read()
             
-            # Execute schema (split by semicolons)
-            statements = [s.strip() for s in schema_sql.split(';') if s.strip()]
-            
-            for statement in statements:
-                if statement:
-                    self.db.execute_query(statement, fetch=False)
+            # Execute the whole schema as one script — do NOT split by ';',
+            # since $$ ... $$ function bodies contain their own semicolons.
+            self.db.execute_script(schema_sql)
             
             logger.info("database_initialized")
             return True
