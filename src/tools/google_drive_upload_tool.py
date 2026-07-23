@@ -62,6 +62,14 @@ Input: file_path, filename (optional), folder_id (optional)"""
                 error="Google Drive not enabled. Set GOOGLE_DRIVE_ENABLED=true in .env"
             )
         
+        # Validate file exists before attempting upload
+        import os as _os
+        if not _os.path.exists(file_path):
+            return ToolResult(
+                success=False,
+                error=f"File not found: {file_path}. Ensure markdown_generator or pdf_generator ran successfully first."
+            )
+        
         try:
             from google.oauth2 import service_account
             from googleapiclient.discovery import build

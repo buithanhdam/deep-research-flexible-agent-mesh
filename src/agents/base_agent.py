@@ -99,19 +99,47 @@ class BaseAgent(ABC):
             raise
     
     def _parse_json_response(self, response: str) -> Dict[str, Any]:
-        """Parse JSON response from LLM.
+        """Parse JSON from LLM response, handling markdown code blocks."""
+        if not response or not response.strip():
+            raise ValueError("LLM returned empty response")
         
-        Args:
-            response: Response string
+        text = response.strip()
         
-        Returns:
-            Parsed JSON dict
-        """
+        # 1. Direct parse (pure JSON)
         try:
-            return json.loads(response)
-        except json.JSONDecodeError as e:
-            self.logger.error("json_parse_failed", error=str(e), response=response[:200])
-            raise ValueError(f"Failed to parse JSON: {str(e)}")
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+        
+        # 2. Strip ```json ... ``` or ``` ... ```
+        import re
+        pattern = r"```(?:json)?\s*([\s\S]*?)```"
+        matches = re.findall(pattern, text)
+        for match in matches:
+            candidate = match.strip()
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+        
+        # 3. Find first { ... } or [ ... ] block
+        for opener, closer in [('{', '}'), ('[', ']')]:
+            start = text.find(opener)
+            end = text.rfind(closer)
+            if start != -1 and end > start:
+                candidate = text[start:end + 1]
+                try:
+                    return json.loads(candidate)
+                except json.JSONDecodeError:
+                    continue
+        
+        # 4. Nothing worked
+        self.logger.error(
+            "json_parse_failed",
+            agent=self.name,
+            response_preview=text[:300]
+        )
+        raise ValueError(f"Cannot extract JSON from LLM response. Preview: {text[:200]}")
     
     def execute(
         self,
@@ -119,25 +147,18 @@ class BaseAgent(ABC):
         workflow_id: Optional[str] = None,
         context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Execute task with execution tracking and memory integration.
+        """Execute task with execution tracking and memory integration."""
+        import traceback
         
-        Args:
-            task: Task description
-            workflow_id: Optional workflow ID for tracking
-            context: Additional context (may include session_id)
-        
-        Returns:
-            Result dict
-        """
-        # Merge workflow_id into context
         if context is None:
             context = {}
         if workflow_id:
             context["workflow_id"] = workflow_id
         
-        # Check cache first (only for non-chat tasks)
         session_id = context.get("session_id")
-        if not session_id or context.get("task_type") != "chat":
+        
+        # Check cache (skip for chat tasks)
+        if context.get("task_type") != "chat":
             cached_result = self._check_cache(task)
             if cached_result:
                 self.logger.info("returning_cached_result")
@@ -157,13 +178,19 @@ class BaseAgent(ABC):
         try:
             self.logger.info(
                 "task_started",
-                task=task[:100],
+                agent=self.name,
+                task=task[:120],
                 session_id=session_id,
                 workflow_id=workflow_id
             )
             
-            # Process task with full context
             result = self.process_task(task, context)
+            
+            # Đảm bảo result có đầy đủ fields
+            if not isinstance(result, dict):
+                raise ValueError(f"{self.name}.process_task returned {type(result)} instead of dict")
+            if "success" not in result:
+                result["success"] = True
             
             execution.result = result
             execution.confidence = result.get("confidence", CONFIDENCE_MEDIUM)
@@ -171,46 +198,42 @@ class BaseAgent(ABC):
             
             self.logger.info(
                 "task_completed",
-                success=result.get("success", False),
+                agent=self.name,
+                success=result.get("success"),
                 confidence=execution.confidence
             )
             
-            # Save execution to memory
             if workflow_id:
                 self.memory.save_agent_execution(workflow_id, execution)
             
-            # Cache result if high confidence
             if result.get("success") and execution.confidence >= 0.7:
                 self._save_to_cache(task, result, execution.confidence)
             
-            # Save to chat history if session_id provided
             if session_id:
                 from src.memory.models import ChatMessage
-                
-                # Save user message
                 self.memory.add_chat_message(ChatMessage(
-                    session_id=session_id,
-                    role="user",
-                    content=task,
-                    agent_name=self.name
+                    session_id=session_id, role="user",
+                    content=task, agent_name=self.name
                 ))
-                
-                # Save assistant response
-                response_content = json.dumps(result.get("result", result), ensure_ascii=False)
                 self.memory.add_chat_message(ChatMessage(
-                    session_id=session_id,
-                    role="assistant",
-                    content=response_content,
+                    session_id=session_id, role="assistant",
+                    content=json.dumps(result.get("result", result), ensure_ascii=False),
                     agent_name=self.name
                 ))
             
             return result
             
         except Exception as e:
-            execution.error = str(e)
+            full_tb = traceback.format_exc()
+            execution.error = full_tb
             execution.completed_at = datetime.utcnow()
             
-            self.logger.error("task_failed", error=str(e))
+            self.logger.error(
+                "task_failed",
+                agent=self.name,
+                error=str(e),
+                traceback=full_tb
+            )
             
             if workflow_id:
                 self.memory.save_agent_execution(workflow_id, execution)
@@ -218,6 +241,9 @@ class BaseAgent(ABC):
             return {
                 "success": False,
                 "error": str(e),
+                "error_type": type(e).__name__,
+                "traceback": full_tb,
+                "agent": self.name,
                 "confidence": 0.0
             }
     
@@ -317,50 +343,96 @@ class BaseAgent(ABC):
                 ttl_hours=24
             )
     
-    def _execute_tool_calls(self, tool_calls: List[Dict]) -> List[Dict]:
-        """Execute tool calls from LLM.
+    @staticmethod
+    def _parse_tool_arguments(arguments: Any, tool_name: str) -> Dict[str, Any]:
+        """Robustly parse tool arguments from LLM.
         
-        Args:
-            tool_calls: List of tool call dicts
-        
-        Returns:
-            List of tool results
+        LLM can produce malformed JSON when arguments contain large markdown
+        strings with literal newlines or unescaped quotes.
         """
+        if isinstance(arguments, dict):
+            return arguments
+        if not arguments or not str(arguments).strip():
+            return {}
+        
+        text = str(arguments)
+        
+        # 1. Direct parse
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+        
+        # 2. strict=False: allows literal control characters inside strings
+        try:
+            return json.loads(text, strict=False)
+        except json.JSONDecodeError:
+            pass
+        
+        # 3. Fix trailing commas then retry
+        import re
+        fixed = re.sub(r',\s*([}\]])', r'\1', text)
+        try:
+            return json.loads(fixed, strict=False)
+        except json.JSONDecodeError:
+            pass
+        
+        raise ValueError(
+            f"Cannot parse tool arguments for '{tool_name}'. "
+            f"First 400 chars:\n{text[:400]}"
+        )
+
+    def _execute_tool_calls(self, tool_calls: List[Dict]) -> List[Dict]:
+        """Execute tool calls returned by the LLM."""
         results = []
         
         for tool_call in tool_calls:
             function_name = tool_call.get("function", {}).get("name")
-            arguments = tool_call.get("function", {}).get("arguments", "{}")
+            raw_args = tool_call.get("function", {}).get("arguments", "{}")
             
             if function_name not in self._tool_map:
                 self.logger.warning("tool_not_found", tool=function_name)
                 results.append({
                     "tool": function_name,
                     "success": False,
-                    "error": f"Tool {function_name} not available"
+                    "error": f"Tool '{function_name}' not registered on this agent"
                 })
                 continue
             
             tool = self._tool_map[function_name]
             
             try:
-                # Parse arguments
-                import json
-                args = json.loads(arguments) if isinstance(arguments, str) else arguments
+                args = self._parse_tool_arguments(raw_args, function_name)
                 
-                # Execute tool
-                self.logger.info("executing_tool", tool=function_name, args=args)
-                result = tool.execute(**args)
+                self.logger.info(
+                    "executing_tool",
+                    tool=function_name,
+                    arg_keys=list(args.keys()) if args else []
+                )
+                
+                tool_result = tool.execute(**args)
+                
+                if not tool_result.success:
+                    self.logger.warning(
+                        "tool_returned_failure",
+                        tool=function_name,
+                        error=tool_result.error
+                    )
                 
                 results.append({
                     "tool": function_name,
-                    "success": result.success,
-                    "result": result.result,
-                    "error": result.error
+                    "success": tool_result.success,
+                    "result": tool_result.result,
+                    "error": tool_result.error
                 })
                 
             except Exception as e:
-                self.logger.error("tool_execution_failed", tool=function_name, error=str(e))
+                self.logger.error(
+                    "tool_execution_failed",
+                    tool=function_name,
+                    error=str(e),
+                    raw_args_preview=str(raw_args)[:300]
+                )
                 results.append({
                     "tool": function_name,
                     "success": False,
@@ -374,64 +446,61 @@ class BaseAgent(ABC):
         messages: List[Dict[str, str]],
         max_iterations: int = 5
     ) -> Dict[str, Any]:
-        """Process task with tool calling loop.
+        """Process task with tool calling loop."""
+        import traceback
         
-        Args:
-            messages: Initial messages
-            max_iterations: Max tool calling iterations
-        
-        Returns:
-            Final result dict
-        """
-        # Get tool definitions
         tool_definitions = [tool.to_function_definition() for tool in self.tools]
-        
         current_messages = messages.copy()
         
         for iteration in range(max_iterations):
-            self.logger.debug("tool_calling_iteration", iteration=iteration + 1)
+            self.logger.debug("tool_calling_iteration", agent=self.name, iteration=iteration + 1)
             
-            # Call LLM with tools
+            # LLM call returns full response dict khi có tools
             response = self._call_llm(
                 current_messages,
                 temperature=0.3,
                 tools=tool_definitions
             )
             
-            # Check if LLM wants to call tools
+            # response có thể là str (no tools path) hoặc dict (tools path)
+            if isinstance(response, str):
+                return {"content": response, "iterations": iteration + 1}
+            
             choices = response.get("choices", [])
             if not choices:
+                self.logger.warning("empty_choices_from_llm", agent=self.name, response=str(response)[:300])
                 break
             
             message = choices[0].get("message", {})
             tool_calls = message.get("tool_calls")
             
             if not tool_calls:
-                # No more tool calls, return content
-                content = message.get("content", "")
-                return {
-                    "content": content,
-                    "iterations": iteration + 1
-                }
+                # LLM finished — trả content cuối
+                content = message.get("content") or ""
+                if not content:
+                    self.logger.warning(
+                        "empty_content_no_tool_calls",
+                        agent=self.name,
+                        message=str(message)[:300]
+                    )
+                return {"content": content, "iterations": iteration + 1}
             
             # Execute tools
             tool_results = self._execute_tool_calls(tool_calls)
             
-            # Add assistant message
+            # Append assistant turn + tool results
             current_messages.append(message)
-            
-            # Add tool results as messages
-            for i, (tool_call, tool_result) in enumerate(zip(tool_calls, tool_results)):
+            for i, (tc, tr) in enumerate(zip(tool_calls, tool_results)):
                 current_messages.append({
                     "role": "tool",
-                    "tool_call_id": tool_call.get("id", f"call_{i}"),
-                    "name": tool_result["tool"],
-                    "content": json.dumps(tool_result)
+                    "tool_call_id": tc.get("id", f"call_{i}"),
+                    "name": tr["tool"],
+                    "content": json.dumps(tr)
                 })
         
-        # Max iterations reached
+        self.logger.warning("max_tool_iterations_reached", agent=self.name, iterations=max_iterations)
         return {
-            "content": "Max tool calling iterations reached",
+            "content": "",
             "iterations": max_iterations,
             "stopped": "max_iterations"
         }

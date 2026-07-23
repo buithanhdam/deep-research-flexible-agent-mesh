@@ -194,20 +194,11 @@ Rules:
         workflow_id: Optional[str] = None,
         context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Execute single agent.
+        """Execute single agent."""
+        import traceback as _tb
         
-        Args:
-            agent_name: Agent to execute
-            task: Task for agent
-            workflow_id: Workflow ID
-            context: Context
-        
-        Returns:
-            Agent result
-        """
         agent = self._agent_registry[agent_name]
         
-        # Build context
         agent_context = {}
         if context and "session_id" in context:
             agent_context["session_id"] = context["session_id"]
@@ -219,21 +210,34 @@ Rules:
                 context=agent_context
             )
             
-            # Store in working memory
-            if workflow_id:
-                self.memory.set_context(
-                    workflow_id,
-                    f"{agent_name}_last_result",
-                    result
+            # Log nếu agent trả về failure
+            if not result.get("success"):
+                self.logger.warning(
+                    "sub_agent_returned_failure",
+                    agent=agent_name,
+                    error=result.get("error"),
+                    error_type=result.get("error_type"),
                 )
+            
+            if workflow_id:
+                self.memory.set_context(workflow_id, f"{agent_name}_last_result", result)
             
             return result
             
         except Exception as e:
-            self.logger.error("agent_execution_failed", agent=agent_name, error=str(e))
+            full_tb = _tb.format_exc()
+            self.logger.error(
+                "agent_execution_exception",
+                agent=agent_name,
+                error=str(e),
+                traceback=full_tb
+            )
             return {
                 "success": False,
                 "error": str(e),
+                "error_type": type(e).__name__,
+                "traceback": full_tb,
+                "agent": agent_name,
                 "confidence": 0.0
             }
     
@@ -299,11 +303,16 @@ Provide JSON:
             }
             
         except Exception as e:
-            self.logger.error("finalization_failed", error=str(e))
+            import traceback as _tb
+            full_tb = _tb.format_exc()
+            self.logger.error("finalization_failed", error=str(e), traceback=full_tb)
             return {
                 "success": False,
                 "action": "escalate",
                 "confidence": 0.0,
                 "error": str(e),
+                "error_type": type(e).__name__,
+                "traceback": full_tb,
+                "agent": self.name,
                 "agent_results": all_results
             }

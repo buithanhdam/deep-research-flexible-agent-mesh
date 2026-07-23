@@ -34,24 +34,34 @@ class ArchitectAgent(BaseAgent):
         context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Generate documents using tool calling loop."""
+        import traceback as _tb
         messages = self._format_messages_with_tools(task, context)
         
         try:
-            # Always use tool calling — architect is tool-driven
             raw = self._process_with_tools(messages, max_iterations=8)
-            result = self._parse_json_response(raw.get("content", "{}"))
+            content = raw.get("content", "")
+            
+            if not content or raw.get("stopped") == "max_iterations":
+                summary_msgs = messages + [{
+                    "role": "user",
+                    "content": "Output your final JSON result now summarizing all documents created."
+                }]
+                content = self._call_llm(summary_msgs, temperature=0.2, json_mode=True)
+            
+            result = self._parse_json_response(content)
             
             try:
                 parsed = ArchitectOutput(**result)
                 confidence = parsed.confidence
-            except Exception:
+            except Exception as e:
+                self.logger.warning("pydantic_validation_skipped", error=str(e))
                 confidence = result.get("confidence", 0.9)
             
             return {"success": True, "result": result, "confidence": confidence}
             
         except Exception as e:
-            self.logger.error("architect_processing_failed", error=str(e))
-            return {"success": False, "error": str(e), "confidence": 0.0}
+            self.logger.error("architect_processing_failed", error=str(e), traceback=_tb.format_exc())
+            return {"success": False, "error": str(e), "error_type": type(e).__name__, "confidence": 0.0}
     
     def _format_messages_with_tools(
         self,

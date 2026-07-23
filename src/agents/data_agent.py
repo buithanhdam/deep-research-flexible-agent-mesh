@@ -25,29 +25,30 @@ class DataAgent(BaseAgent):
         context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Process data task with tool calling."""
+        import traceback as _tb
         messages = self.format_messages(task, context)
         
         try:
             if self.tools:
                 raw = self._process_with_tools(messages)
-                result = self._parse_json_response(raw.get("content", "{}"))
+                content = raw.get("content", "")
+                if not content or raw.get("stopped") == "max_iterations":
+                    summary_msgs = messages + [{"role": "user", "content": "Output your final JSON result now."}]
+                    content = self._call_llm(summary_msgs, temperature=0.2, json_mode=True)
+                result = self._parse_json_response(content)
             else:
                 response = self._call_llm(messages, temperature=0.3, json_mode=True)
                 result = self._parse_json_response(response)
             
-            # Validate against schema
             try:
                 parsed = DataOutput(**result)
                 confidence = parsed.confidence
-            except Exception:
+            except Exception as e:
+                self.logger.warning("pydantic_validation_skipped", error=str(e))
                 confidence = result.get("confidence", 0.7)
             
-            return {
-                "success": True,
-                "result": result,
-                "confidence": confidence
-            }
+            return {"success": True, "result": result, "confidence": confidence}
             
         except Exception as e:
-            self.logger.error("data_processing_failed", error=str(e))
-            return {"success": False, "error": str(e), "confidence": 0.0}
+            self.logger.error("data_processing_failed", error=str(e), traceback=_tb.format_exc())
+            return {"success": False, "error": str(e), "error_type": type(e).__name__, "confidence": 0.0}

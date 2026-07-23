@@ -28,7 +28,7 @@ pypandoc==1.12         # Yêu cầu hệ thống cài sẵn pandoc binary
 graphviz==0.20.1       # Yêu cầu hệ thống cài sẵn graphviz binary
 pypdf>=4.0.0           # Thay thế PyPDF2 đã deprecated
 python-docx==1.1.0
-
+pydyf==0.10.0
 # Google Drive
 google-auth==2.25.2
 google-auth-oauthlib==1.2.0

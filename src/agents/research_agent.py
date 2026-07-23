@@ -25,12 +25,20 @@ class ResearchAgent(BaseAgent):
         context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Research task using tool calling loop."""
+        import traceback as _tb
         messages = self.format_messages(task, context)
         
         try:
             if self.tools:
                 raw = self._process_with_tools(messages, max_iterations=6)
-                result = self._parse_json_response(raw.get("content", "{}"))
+                content = raw.get("content", "")
+                
+                # Nếu tools loop kết thúc nhưng content rỗng, yêu cầu LLM tổng hợp
+                if not content or raw.get("stopped") == "max_iterations":
+                    self.logger.warning("tools_loop_ended_without_output", agent=self.name)
+                    content = self._request_final_summary(messages)
+                
+                result = self._parse_json_response(content)
             else:
                 response = self._call_llm(messages, temperature=0.5, json_mode=True)
                 result = self._parse_json_response(response)
@@ -48,7 +56,8 @@ class ResearchAgent(BaseAgent):
                     "result": parsed.model_dump(),
                     "confidence": parsed.confidence
                 }
-            except Exception:
+            except Exception as pydantic_err:
+                self.logger.warning("pydantic_validation_skipped", error=str(pydantic_err))
                 return {
                     "success": True,
                     "result": result,
@@ -56,5 +65,22 @@ class ResearchAgent(BaseAgent):
                 }
             
         except Exception as e:
-            self.logger.error("research_failed", error=str(e))
-            return {"success": False, "error": str(e), "confidence": 0.0}
+            self.logger.error("research_failed", error=str(e), traceback=_tb.format_exc())
+            return {
+                "success": False,
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "confidence": 0.0
+            }
+    
+    def _request_final_summary(self, original_messages: list) -> str:
+        """Khi tool loop xong nhưng chưa có JSON output, yêu cầu LLM tổng hợp."""
+        summary_messages = original_messages + [{
+            "role": "user",
+            "content": (
+                "Based on all the research you have done so far, "
+                "please now output your final answer as a JSON object "
+                "matching the required schema. Do not call any more tools."
+            )
+        }]
+        return self._call_llm(summary_messages, temperature=0.3, json_mode=True)

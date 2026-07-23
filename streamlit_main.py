@@ -63,12 +63,46 @@ if user_input:
             content = result.get("response", "(không có phản hồi)")
 
         elif status == "completed" and result.get("type") == "research":
-            content = (
-                f"✅ **Hoàn thành** (confidence: {result.get('confidence', 0):.2f}, "
-                f"rounds: {result.get('rounds', 0)})\n\n"
-                f"**Kết quả:**\n```json\n{result.get('result', {})}\n```\n\n"
-                f"**Tài liệu tạo ra:**\n```json\n{result.get('documents', {})}\n```"
-            )
+            res = result.get("result", {}) or {}
+            docs = result.get("documents", {}) or {}
+
+            summary = res.get("summary", "").strip()
+            confidence = res.get("confidence", result.get("confidence", 0))
+            rounds = result.get("rounds", 0)
+            recommendations = res.get("recommendations", [])
+            sources = res.get("sources", [])
+
+            content = f"✅ **Hoàn thành** (confidence: {confidence:.2f}, rounds: {rounds})\n\n"
+
+            if summary:
+                content += f"**Tóm tắt:**\n{summary}\n\n"
+
+            if recommendations:
+                rec_lines = "\n".join(f"- {r}" for r in recommendations[:5])
+                content += f"**Khuyến nghị chính:**\n{rec_lines}\n\n"
+
+            # Thông báo về tài liệu tạo ra
+            created = docs.get("documents_created", [])
+            uploaded = docs.get("uploaded_files", [])
+
+            if created:
+                doc = created[0]
+                content += (
+                    f"📄 **Tài liệu:** {doc.get('title', 'Untitled')} "
+                    f"({doc.get('size_bytes', 0) / 1024:.1f} KB, "
+                    f"{doc.get('sections', '?')} phần)\n\n"
+                )
+
+            if uploaded:
+                up = uploaded[0]
+                if up.get("status") == "upload_failed":
+                    content += f"⚠️ *Lưu ý: upload lên {up.get('service')} thất bại — {up.get('reason', 'không rõ lý do')}*\n\n"
+                elif up.get("link"):
+                    content += f"🔗 [Xem tài liệu]({up['link']})\n\n"
+
+            if sources:
+                src_lines = "\n".join(f"- {s}" for s in sources[:5])
+                content += f"**Nguồn tham khảo (top 5):**\n{src_lines}"
 
         elif status == "escalated":
             content = (

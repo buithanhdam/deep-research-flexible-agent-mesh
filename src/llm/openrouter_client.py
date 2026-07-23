@@ -47,6 +47,7 @@ class OpenRouterClient:
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
         response_format: Optional[Dict[str, str]] = None,
+        tools: Optional[List[Dict]] = None,
         **kwargs
     ) -> Dict[str, Any]:
         """Send chat completion request to OpenRouter.
@@ -74,6 +75,7 @@ class OpenRouterClient:
             temperature=temperature,
             max_tokens=max_tokens,
             response_format=response_format,
+            tools=tools,
             **kwargs
         )
 
@@ -83,6 +85,7 @@ class OpenRouterClient:
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
         response_format: Optional[Dict[str, str]] = None,
+        tools: Optional[List[Dict]] = None,
         **kwargs
     ) -> Dict[str, Any]:
         """Single (non-retried) call to OpenRouter — wrapped by chat_completion()."""
@@ -90,7 +93,8 @@ class OpenRouterClient:
             "chat_completion_request",
             model=self.model,
             message_count=len(messages),
-            temperature=temperature
+            temperature=temperature,
+            has_tools=bool(tools)
         )
 
         payload = {
@@ -106,6 +110,9 @@ class OpenRouterClient:
         if response_format:
             payload["response_format"] = response_format
 
+        if tools:
+            payload["tools"] = tools
+
         try:
             response = requests.post(
                 f"{self.base_url}/chat/completions",
@@ -117,6 +124,13 @@ class OpenRouterClient:
 
             result = response.json()
 
+            # Detect API-level error inside 200 response (OpenRouter quirk)
+            if "error" in result:
+                err = result["error"]
+                err_msg = err.get("message", str(err)) if isinstance(err, dict) else str(err)
+                logger.error("openrouter_api_error", error=err_msg, full=result)
+                raise RuntimeError(f"OpenRouter API error: {err_msg}")
+
             logger.info(
                 "chat_completion_success",
                 model=self.model,
@@ -125,8 +139,17 @@ class OpenRouterClient:
 
             return result
 
+        except requests.exceptions.HTTPError as e:
+            # Extract body for richer error message
+            try:
+                body = e.response.json()
+            except Exception:
+                body = e.response.text if e.response else ""
+            logger.error("chat_completion_http_error", status=e.response.status_code if e.response else None, body=str(body)[:500])
+            raise RuntimeError(f"HTTP {e.response.status_code if e.response else '?'}: {body}") from e
+
         except requests.exceptions.RequestException as e:
-            logger.error("chat_completion_error", error=str(e))
+            logger.error("chat_completion_request_error", error=str(e))
             raise
 
     def get_message_content(self, response: Dict[str, Any]) -> str:

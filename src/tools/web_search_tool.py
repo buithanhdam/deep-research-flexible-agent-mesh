@@ -1,5 +1,7 @@
 """Web search tool with Tavily + DuckDuckGo fallback."""
 
+import random
+import time
 from typing import Dict, Any, List, Optional
 import requests
 from src.tools.base_tool import BaseTool, ToolResult
@@ -127,32 +129,43 @@ Returns: List of search results with title, url, content snippet."""
             logger.error("tavily_search_failed", error=str(e))
             return ToolResult(success=False, error=str(e))
     
-    def _search_duckduckgo(self, query: str, max_results: int) -> ToolResult:
-        """Search using DuckDuckGo (free, no API key needed)."""
-        try:
-            from duckduckgo_search import DDGS
-            
-            with DDGS() as ddgs:
-                results = []
-                for r in ddgs.text(query, max_results=max_results):
-                    results.append({
-                        "title": r.get("title", ""),
-                        "url": r.get("href", ""),
-                        "content": r.get("body", ""),
-                        "score": 0
-                    })
-            
-            return ToolResult(
-                success=True,
-                result={
-                    "query": query,
-                    "answer": None,
-                    "results": results,
-                    "source": "duckduckgo"
-                },
-                metadata={"result_count": len(results)}
-            )
-            
-        except Exception as e:
-            logger.error("duckduckgo_search_failed", error=str(e))
-            return ToolResult(success=False, error=f"All search methods failed: {str(e)}")
+    def _search_duckduckgo(self, query: str, max_results: int, retries: int = 3) -> ToolResult:
+        """Search using DuckDuckGo (free, no API key needed), with retry on rate limit."""
+        from duckduckgo_search import DDGS
+        from duckduckgo_search.exceptions import RatelimitException
+
+        last_error = None
+        for attempt in range(retries):
+            try:
+                with DDGS() as ddgs:
+                    results = []
+                    for r in ddgs.text(query, max_results=max_results):
+                        results.append({
+                            "title": r.get("title", ""),
+                            "url": r.get("href", ""),
+                            "content": r.get("body", ""),
+                            "score": 0
+                        })
+
+                return ToolResult(
+                    success=True,
+                    result={
+                        "query": query,
+                        "answer": None,
+                        "results": results,
+                        "source": "duckduckgo"
+                    },
+                    metadata={"result_count": len(results)}
+                )
+
+            except RatelimitException as e:
+                last_error = e
+                wait = (2 ** attempt) + random.uniform(0, 1)
+                logger.warning("duckduckgo_ratelimited_retrying", attempt=attempt, wait=wait)
+                time.sleep(wait)
+            except Exception as e:
+                logger.error("duckduckgo_search_failed", error=str(e))
+                return ToolResult(success=False, error=f"All search methods failed: {str(e)}")
+
+        logger.error("duckduckgo_search_failed", error=str(last_error))
+        return ToolResult(success=False, error=f"All search methods failed: {str(last_error)}")

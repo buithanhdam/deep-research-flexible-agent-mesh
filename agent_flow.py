@@ -24,6 +24,49 @@ from src.tools import (WebSearchTool, WebScrapeTool, JsonProcessorTool, Markdown
 logger = get_logger(__name__)
 
 
+def _send_error_to_lark(
+    workflow_id: str,
+    task: str,
+    error: str,
+    error_type: str = "",
+    agent: str = "",
+    traceback: str = ""
+) -> None:
+    """Send structured error notification to Lark."""
+    try:
+        from src.tools.lark_send_message_tool import LarkSendMessageTool
+        
+        # Truncate traceback — Lark có giới hạn message size
+        tb_snippet = traceback.strip().splitlines()
+        tb_short = "\n".join(tb_snippet[-10:]) if tb_snippet else "(no traceback)"
+        
+        msg = (
+            f"❌ Task Failed\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"Workflow : {workflow_id}\n"
+            f"Agent    : {agent or 'unknown'}\n"
+            f"Error    : {error_type}: {error}\n\n"
+            f"Task (preview):\n{task[:300]}\n\n"
+            f"Traceback (last 10 lines):\n{tb_short}"
+        )
+        
+        lark_tool = LarkSendMessageTool()
+        result = lark_tool.execute(
+            receive_id=config.LARK_ERROR_CHAT_ID,
+            message=msg,
+            msg_type="text"
+        )
+        
+        if not result.success:
+            logger.error("lark_error_notification_failed", error=result.error)
+        else:
+            logger.info("lark_error_notification_sent", workflow_id=workflow_id)
+            
+    except Exception as e:
+        # Tuyệt đối không raise ở đây
+        logger.error("lark_error_notification_exception", error=str(e))
+
+
 def setup_orchestrator() -> OrchestratorAgent:
     """Setup orchestrator with registered agents and their tools.
     
@@ -222,49 +265,70 @@ Provide links and file paths.
                 }
         
         else:
-            logger.error("orchestrator_failed", workflow_id=workflow_id)
-            error_msg = orchestrator_result.get("error", "Unknown error")
+            # Build rich error info from orchestrator result
+            error_msg = orchestrator_result.get("error") or "Unknown error"
+            error_type = orchestrator_result.get("error_type", "")
+            tb = orchestrator_result.get("traceback", "")
+            agent = orchestrator_result.get("agent", "orchestrator")
             
-            # Send error notification if Lark configured
+            logger.error(
+                "orchestrator_failed",
+                workflow_id=workflow_id,
+                error=error_msg,
+                error_type=error_type,
+                agent=agent,
+                traceback=tb
+            )
+            
+            # Send full error to Lark
             if config.LARK_APP_ID and config.LARK_ERROR_CHAT_ID:
-                try:
-                    from src.tools.lark_send_message_tool import LarkSendMessageTool
-                    lark_tool = LarkSendMessageTool()
-                    lark_tool.execute(
-                        receive_id=config.LARK_ERROR_CHAT_ID,
-                        message=f"❌ Task Failed\n\nWorkflow: {workflow_id}\nError: {error_msg}\n\nTask: {message[:200]}",
-                        msg_type="text"
-                    )
-                except Exception as e:
-                    logger.error("error_notification_failed", error=str(e))
+                _send_error_to_lark(
+                    workflow_id=workflow_id,
+                    task=message,
+                    error=error_msg,
+                    error_type=error_type,
+                    agent=agent,
+                    traceback=tb
+                )
             
             return {
                 "workflow_id": workflow_id,
                 "status": "failed",
                 "error": error_msg,
+                "error_type": error_type,
+                "agent": agent,
+                "traceback": tb,
                 "details": orchestrator_result
             }
     
     except Exception as e:
-        logger.error("processing_failed", workflow_id=workflow_id, error=str(e))
+        import traceback as _tb
+        full_tb = _tb.format_exc()
         
-        # Send critical error notification
+        logger.error(
+            "processing_failed",
+            workflow_id=workflow_id,
+            error=str(e),
+            error_type=type(e).__name__,
+            traceback=full_tb
+        )
+        
         if config.LARK_APP_ID and config.LARK_ERROR_CHAT_ID:
-            try:
-                from src.tools.lark_send_message_tool import LarkSendMessageTool
-                lark_tool = LarkSendMessageTool()
-                lark_tool.execute(
-                    receive_id=config.LARK_ERROR_CHAT_ID,
-                    message=f"🚨 Critical Error\n\nWorkflow: {workflow_id}\nException: {str(e)}\n\nTask: {message[:200]}",
-                    msg_type="text"
-                )
-            except:
-                pass
+            _send_error_to_lark(
+                workflow_id=workflow_id,
+                task=message,
+                error=str(e),
+                error_type=type(e).__name__,
+                agent="process_message",
+                traceback=full_tb
+            )
         
         return {
             "workflow_id": workflow_id,
             "status": "error",
-            "error": str(e)
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": full_tb
         }
     finally:
         # Clear working memory if auto-clear enabled
