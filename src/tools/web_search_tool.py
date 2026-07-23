@@ -86,7 +86,17 @@ Returns: List of search results with title, url, content snippet."""
             
             response = requests.post(
                 "https://api.tavily.com/search",
-                json=search_params,
+                json={
+                    "query": query,
+                    "max_results": max_results,
+                    "include_answer": True,
+                    "include_raw_content": False,
+                    **({"include_domains": self.target_domains} if self.target_domains else {})
+                },
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {config.TAVILY_API_KEY}"
+                },
                 timeout=30
             )
             response.raise_for_status()

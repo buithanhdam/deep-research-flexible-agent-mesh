@@ -17,41 +17,42 @@ class LarkFileDownloadTool(BaseTool):
         return "lark_file_download"
     
     def get_description(self) -> str:
-        return """Download a file from Lark by file key. Returns local file path."""
+        return """Download a file from Lark by message_id and file_key. Returns local file path."""
     
     def get_input_schema(self) -> Dict[str, Any]:
         return {
             "type": "object",
             "properties": {
+                "message_id": {
+                    "type": "string",
+                    "description": "ID of the Lark message that contains the file"
+                },
                 "file_key": {
                     "type": "string",
                     "description": "Lark file key"
+                },
+                "resource_type": {
+                    "type": "string",
+                    "enum": ["file", "image"],
+                    "default": "file",
+                    "description": "Resource type of the attachment"
                 },
                 "output_path": {
                     "type": "string",
                     "description": "Output file path (optional, generates temp if not provided)"
                 }
             },
-            "required": ["file_key"]
+            "required": ["message_id", "file_key"]
         }
     
-    def execute(self, file_key: str, output_path: str = None, **kwargs) -> ToolResult:
-        """Download file from Lark.
-        
-        Args:
-            file_key: File key
-            output_path: Output path
-        
-        Returns:
-            ToolResult with file path
-        """
+    def execute(self, message_id: str, file_key: str, resource_type: str = "file", output_path: str = None, **kwargs) -> ToolResult:
         try:
             if not output_path:
                 temp_dir = tempfile.gettempdir()
                 output_path = os.path.join(temp_dir, f"lark_file_{file_key}")
             
             lark = get_lark_client()
-            file_path = lark.download_file(file_key, output_path)
+            file_path = lark.download_file(message_id, file_key, output_path, resource_type)
             
             file_size = os.path.getsize(file_path)
             
@@ -60,6 +61,7 @@ class LarkFileDownloadTool(BaseTool):
                 result={
                     "file_path": file_path,
                     "file_key": file_key,
+                    "message_id": message_id,
                     "file_size": file_size
                 },
                 metadata={"service": "lark"}

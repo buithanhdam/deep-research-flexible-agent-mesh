@@ -1,9 +1,12 @@
 """Architect Agent - generates technical documents and deliverables."""
 
+import json
 from typing import Dict, Any, Optional, List
 from src.agents.base_agent import BaseAgent
 from src.constants import AGENT_ARCHITECT
 from src.tools.base_tool import BaseTool
+from src.prompt_templates.architect_agent_prompt import get_architect_prompt
+from src.prompt_templates.output_models import ArchitectOutput
 from src.logger import get_logger
 
 logger = get_logger(__name__)
@@ -23,122 +26,32 @@ class ArchitectAgent(BaseAgent):
         self._tool_map = {tool.name: tool for tool in self.tools}
     
     def get_system_prompt(self) -> str:
-        """Get system prompt for architect agent."""
-        tool_descriptions = "\n".join([
-            f"- {tool.name}: {tool.description}"
-            for tool in self.tools
-        ])
-        
-        return f"""You are an Architect Agent specialized in creating technical documentation and deliverables.
-
-# Your Role
-Transform research findings and analysis results into professional, well-structured documents.
-
-# Available Tools
-{tool_descriptions}
-
-# Process
-
-## Step 1: Analyze Input
-Review the results from previous agents (research, data analysis) to understand what needs to be documented.
-
-## Step 2: Plan Document Structure
-Create a logical document structure with:
-- Executive summary
-- Key findings
-- Detailed analysis
-- Recommendations/next steps
-- References/sources
-
-## Step 3: Generate Document
-Use your tools to create the document:
-1. Generate Markdown content with proper sections
-2. Convert to PDF/DOCX if requested
-3. Generate diagrams if needed
-4. Upload to Google Drive if requested
-
-## Step 4: Return Deliverables
-Provide file paths, links, and summary of what was created.
-
-# Output Format
-Always respond with JSON:
-```json
-{{
-  "documents_created": [
-    {{
-      "type": "markdown|pdf|docx",
-      "file_path": "path/to/file",
-      "title": "document title",
-      "size_bytes": 12345
-    }}
-  ],
-  "uploaded_files": [
-    {{
-      "filename": "doc.pdf",
-      "drive_link": "https://drive.google.com/...",
-      "file_id": "abc123"
-    }}
-  ],
-  "summary": "Brief summary of deliverables created",
-  "tool_calls": ["list of tools used"]
-}}
-```
-
-# Rules
-1. Create clear, professional documents
-2. Use proper Markdown formatting
-3. Include all sources and references
-4. Generate diagrams when helpful for understanding
-5. Always upload to Drive if configured
-6. Provide shareable links
-"""
+        return get_architect_prompt(tool_names=[t.name for t in self.tools])
     
     def process_task(
         self,
         task: str,
         context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Process document generation task.
-        
-        Args:
-            task: Task description
-            context: Additional context including results from other agents
-        
-        Returns:
-            Dict with generation results
-        """
-        # Build messages with tool definitions
+        """Generate documents using tool calling loop."""
         messages = self._format_messages_with_tools(task, context)
         
         try:
-            # Call LLM with function calling
-            import json
+            # Always use tool calling — architect is tool-driven
+            raw = self._process_with_tools(messages, max_iterations=8)
+            result = self._parse_json_response(raw.get("content", "{}"))
             
-            # Get tool definitions
-            tools_schema = [tool.to_function_definition() for tool in self.tools]
+            try:
+                parsed = ArchitectOutput(**result)
+                confidence = parsed.confidence
+            except Exception:
+                confidence = result.get("confidence", 0.9)
             
-            # Simple implementation - let LLM decide what to generate
-            # In production, use proper function calling flow
-            
-            response = self._call_llm(messages, temperature=0.3, json_mode=True)
-            result = self._parse_json_response(response)
-            
-            # Execute tool calls if any
-            # This is simplified - in production use proper function calling loop
-            
-            return {
-                "success": True,
-                "result": result,
-                "confidence": 0.9
-            }
+            return {"success": True, "result": result, "confidence": confidence}
             
         except Exception as e:
             self.logger.error("architect_processing_failed", error=str(e))
-            return {
-                "success": False,
-                "error": str(e),
-                "confidence": 0.0
-            }
+            return {"success": False, "error": str(e), "confidence": 0.0}
     
     def _format_messages_with_tools(
         self,

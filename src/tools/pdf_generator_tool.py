@@ -1,5 +1,6 @@
 """PDF generation tool using WeasyPrint."""
 
+from datetime import datetime
 from typing import Dict, Any
 import tempfile
 import os

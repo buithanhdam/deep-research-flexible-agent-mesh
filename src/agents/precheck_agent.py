@@ -4,7 +4,8 @@ from typing import Dict, Any, Optional
 import json
 
 from src.agents.base_agent import BaseAgent
-from src.prompt_templates import get_precheck_prompt
+from src.prompt_templates.precheck_prompt import get_precheck_prompt
+from src.prompt_templates.output_models import PrecheckOutput
 from src.constants import AGENT_PRECHECK
 
 
@@ -40,36 +41,29 @@ class PrecheckAgent(BaseAgent):
         messages = self.format_messages(task, context)
         
         try:
-            # Request JSON response
             response = self._call_llm(messages, temperature=0.3, json_mode=True)
+            raw = self._parse_json_response(response)
             
-            # Parse JSON
-            result = self._parse_json_response(response)
-            
-            # Validate required fields
-            required_fields = ["is_pass", "topic", "task_type"]
-            for field in required_fields:
-                if field not in result:
-                    raise ValueError(f"Missing required field: {field}")
+            # Validate via Pydantic
+            parsed = PrecheckOutput(**raw)
             
             return {
                 "success": True,
-                "result": result,
-                "confidence": 1.0 if result.get("is_pass") is False else 0.9
+                "result": parsed.model_dump(),
+                "confidence": 1.0 if not parsed.is_pass else 0.9
             }
             
         except Exception as e:
             self.logger.error("precheck_failed", error=str(e))
-            
-            # Default to passing through as research on error
+            # Fail-open: pass to orchestrator rather than dropping the task
             return {
                 "success": True,
-                "result": {
-                    "is_pass": True,
-                    "topic": "unknown",
-                    "task_type": "research",
-                    "response": ""
-                },
+                "result": PrecheckOutput(
+                    is_pass=True,
+                    topic="unknown",
+                    task_type="research",
+                    response=""
+                ).model_dump(),
                 "confidence": 0.5,
                 "error": str(e)
             }

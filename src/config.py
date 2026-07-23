@@ -34,6 +34,7 @@ class Config:
     # Agent Configuration
     MAX_RETRIES: int = int(os.environ.get("MAX_RETRIES", "3"))
     TIMEOUT_SECONDS: int = int(os.environ.get("TIMEOUT_SECONDS", "120"))
+    AGENT_LOOP_MAX_ROUNDS: int = int(os.environ.get("AGENT_LOOP_MAX_ROUNDS", "5"))
     
     # Memory Configuration
     CACHE_DEFAULT_TTL_HOURS: int = int(os.environ.get("CACHE_DEFAULT_TTL_HOURS", "24"))

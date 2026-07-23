@@ -37,3 +37,6 @@ google-api-python-client==2.110.0
 # Logging & utilities
 structlog==23.2.0
 tenacity==8.2.3
+
+#chat ui
+streamlit==1.60.0

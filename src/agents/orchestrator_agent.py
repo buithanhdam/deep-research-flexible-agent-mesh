@@ -6,8 +6,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.agents.base_agent import BaseAgent
 from src.prompt_templates.orchestrator_prompt import get_orchestrator_prompt
+from src.prompt_templates.output_models import OrchestratorDecision, OrchestratorFinalOutput
 from src.constants import AGENT_ORCHESTRATOR, CONFIDENCE_HIGH
-
+from src.config import config
 
 class OrchestratorAgent(BaseAgent):
     """Agent that coordinates other agents to complete complex tasks."""
@@ -50,7 +51,7 @@ class OrchestratorAgent(BaseAgent):
             Dict with orchestration result
         """
         workflow_id = context.get("workflow_id") if context else None
-        max_rounds = 3  # Prevent infinite loops
+        max_rounds = config.AGENT_LOOP_MAX_ROUNDS  # Prevent infinite loops
         all_results = []
         
         for round_num in range(max_rounds):
@@ -170,12 +171,14 @@ Rules:
         
         try:
             response = self._call_llm(messages, temperature=0.3, json_mode=True)
-            decision = self._parse_json_response(response)
+            raw = self._parse_json_response(response)
             
-            return {
-                "success": True,
-                **decision
-            }
+            try:
+                parsed = OrchestratorDecision(**raw)
+                return {"success": True, **parsed.model_dump()}
+            except Exception:
+                # Pydantic validation failed, return raw dict
+                return {"success": True, **raw}
             
         except Exception as e:
             self.logger.error("decision_failed", error=str(e))
@@ -274,23 +277,23 @@ Provide JSON:
         
         try:
             response = self._call_llm(messages, temperature=0.3, json_mode=True)
-            synthesis = self._parse_json_response(response)
+            raw = self._parse_json_response(response)
             
-            # Calculate success
+            try:
+                parsed = OrchestratorFinalOutput(**raw)
+                result_dict = parsed.model_dump()
+            except Exception:
+                result_dict = raw
+            
             successful_rounds = [r for r in all_results if r.get("success")]
             success_rate = len(successful_rounds) / len(all_results) if all_results else 0.0
             
             return {
                 "success": success_rate > 0.5,
                 "action": "return",
-                "confidence": synthesis.get("confidence", 0.7),
-                "result": {
-                    "summary": synthesis.get("summary", ""),
-                    "details": synthesis.get("details", ""),
-                    "sources": synthesis.get("sources", []),
-                    "recommendations": synthesis.get("recommendations", [])
-                },
-                "completeness": synthesis.get("completeness", "partial"),
+                "confidence": result_dict.get("confidence", 0.7),
+                "result": result_dict,
+                "completeness": result_dict.get("completeness", "partial"),
                 "agent_results": all_results,
                 "rounds_executed": len(all_results)
             }

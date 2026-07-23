@@ -1,5 +1,6 @@
 """Lark (Feishu) API client."""
 
+import json
 from typing import Dict, Any, Optional
 import requests
 import time
@@ -165,7 +166,7 @@ class LarkClient:
         content = json.dumps({"post": post_content})
         return self.send_message(receive_id, "post", content, receive_id_type)
     
-    def download_file(self, file_key: str, output_path: str) -> str:
+    def download_file(self, message_id: str, file_key: str, output_path: str, resource_type: str = "file") -> str:
         """Download file from Lark.
         
         Args:
@@ -176,12 +177,11 @@ class LarkClient:
             Downloaded file path
         """
         token = self._get_tenant_access_token()
-        
-        url = f"{self.base_url}/im/v1/messages/{file_key}/resources/{file_key}"
+        url = f"{self.base_url}/im/v1/messages/{message_id}/resources/{file_key}"
         headers = {"Authorization": f"Bearer {token}"}
         
         try:
-            response = requests.get(url, headers=headers, timeout=30, stream=True)
+            response = requests.get(url, headers=headers, params={"type": resource_type}, timeout=30, stream=True)
             response.raise_for_status()
             
             with open(output_path, 'wb') as f:
@@ -217,7 +217,7 @@ class LarkClient:
             files = {
                 'file': (os.path.basename(file_path), f)
             }
-            data = {'file_type': file_type}
+            data = {'file_type': file_type, 'file_name': os.path.basename(file_path)}
             
             try:
                 response = requests.post(

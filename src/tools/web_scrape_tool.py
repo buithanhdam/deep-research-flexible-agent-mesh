@@ -1,10 +1,12 @@
 """Web scraping tool to extract content from URLs."""
 
 from typing import Dict, Any
+import os
 import requests
 from bs4 import BeautifulSoup
 from src.tools.base_tool import BaseTool, ToolResult
 from src.logger import get_logger
+from src.config import config
 
 logger = get_logger(__name__)
 
@@ -39,6 +41,91 @@ Use this when you have a specific URL and need to read its full content."""
     
     def execute(self, url: str, max_length: int = 10000) -> ToolResult:
         """Scrape webpage content.
+        
+        Args:
+            url: URL to scrape
+            max_length: Maximum content length
+        
+        Returns:
+            ToolResult with extracted content
+        """
+        # Try Tavily extract first (cleaner extraction)
+        tavily_result = self._try_tavily_extract(url)
+        if tavily_result:
+            # Truncate if too long
+            content = tavily_result.get('content', '')
+            if len(content) > max_length:
+                content = content[:max_length] + "..."
+                tavily_result['content'] = content
+                tavily_result['length'] = len(content)
+            
+            logger.info("web_scrape_success", url=url, method="tavily", length=len(content))
+            return ToolResult(
+                success=True,
+                result=tavily_result,
+                metadata={"method": "tavily"}
+            )
+        
+        # Fallback to traditional scraping
+        logger.info("web_scrape_fallback", url=url, method="traditional")
+        return self._traditional_scrape(url, max_length)
+    
+    def _try_tavily_extract(self, url: str) -> Dict[str, Any] | None:
+        """Try to extract content using Tavily API.
+        
+        Args:
+            url: URL to extract
+        
+        Returns:
+            Extracted content dict or None if failed
+        """
+        try:
+            api_key = config.TAVILY_API_KEY
+            if not api_key:
+                logger.debug("tavily_api_key_not_found", url=url)
+                return None
+            
+            # Use Tavily extract API
+            response = requests.post(
+                "https://api.tavily.com/extract",
+                json={"urls": [url]},
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}"
+                },
+                timeout=15
+            )
+            
+            if response.status_code != 200:
+                logger.warning("tavily_extract_failed", url=url, status=response.status_code)
+                return None
+            
+            data = response.json()
+            if not data or "results" not in data or not data["results"]:
+                logger.warning("tavily_extract_empty", url=url)
+                return None
+            
+            result = data["results"][0]
+            raw_content = result.get("raw_content", "")
+            
+            if not raw_content:
+                logger.warning("tavily_extract_no_content", url=url)
+                return None
+            
+            return {
+                "url": url,
+                "title": result.get("title", ""),
+                "content": raw_content,
+                "description": "",  # Tavily doesn't provide meta description
+                "length": len(raw_content)
+            }
+            
+        except Exception as e:
+            logger.warning("tavily_extract_error", url=url, error=str(e))
+            return None
+    
+    def _traditional_scrape(self, url: str, max_length: int) -> ToolResult:
+        """Traditional web scraping using requests and BeautifulSoup.
         
         Args:
             url: URL to scrape
@@ -104,6 +191,7 @@ Use this when you have a specific URL and need to read its full content."""
                     "length": len(clean_text)
                 },
                 metadata={
+                    "method": "traditional",
                     "status_code": response.status_code,
                     "content_type": response.headers.get('content-type', '')
                 }

@@ -173,6 +173,13 @@ python scripts/view_session.py user123
 python scripts/cleanup_memory.py
 ```
 
+
+### Streamlit chat UI
+
+```bash
+streamlit run streamlit_main.py
+```
+
 ---
 
 ## 🏗️ Architecture
