@@ -19,6 +19,23 @@ TASK_TYPE_RESEARCH = "research"
 TASK_TYPE_DATA = "data"
 TASK_TYPE_BUILD = "build"
 
+# Task Tiers — phân loại độ phức tạp để chọn flow xử lý
+TIER_CHAT = "chat"                      # Tier 0: hỏi đáp nhanh, trả lời trực tiếp
+TIER_QUICK_RESEARCH = "quick_research"  # Tier 1: tra cứu/verify, chỉ trả findings
+TIER_DEEP_RESEARCH = "deep_research"    # Tier 2: nghiên cứu sâu, đề xuất deliverables
+TIER_MULTI_DOMAIN = "multi_domain"      # Tier 3: project nhiều chủ đề, cần decomposition
+
+# Delivery Intent — user có yêu cầu rõ deliverable không?
+DELIVERY_NONE = "none"                  # Chỉ cần câu trả lời / findings
+DELIVERY_DOCUMENT = "document"          # Yêu cầu rõ tạo tài liệu (PDF/MD/DOCX)
+DELIVERY_DIAGRAM = "diagram"            # Yêu cầu rõ tạo diagram
+DELIVERY_NOTIFY = "notify"              # Yêu cầu rõ gửi notification
+DELIVERY_UPLOAD = "upload"              # Yêu cầu rõ upload lên Drive/Lark
+
+# Workflow Status (mở rộng cho human-in-the-loop gate)
+WORKFLOW_AWAITING_CONFIRMATION = "awaiting_confirmation"
+WORKFLOW_GENERATING = "generating"
+
 # Output Markers (for n8n parsing)
 JSON_START_MARKER = "@@JSON_START@@"
 JSON_END_MARKER = "@@JSON_END@@"

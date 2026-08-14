@@ -13,8 +13,33 @@ class PrecheckOutput(BaseModel):
     is_pass: bool = Field(..., description="True if task should go to orchestrator")
     topic: str = Field(..., description="Brief topic description, max 10 words")
     task_type: Literal["chat", "research", "integration", "build", "data"] = Field(...)
+    # Tier phân loại độ phức tác — quyết định flow xử lý
+    task_tier: Literal["chat", "quick_research", "deep_research", "multi_domain"] = Field(
+        default="quick_research",
+        description="Complexity tier: chat=trả lời nhanh, quick_research=tra cứu, "
+                    "deep_research=nghiên cứu sâu, multi_domain=project nhiều chủ đề"
+    )
+    # Delivery intent — user có yêu cầu rõ deliverable (file/notify) không?
+    delivery_intent: Literal["none", "document", "diagram", "notify", "upload"] = Field(
+        default="none",
+        description="none=chỉ cần câu trả lời, document=tạo PDF/MD/DOCX, "
+                    "diagram=tạo sơ đồ, notify=gửi thông báo, upload=upload lên Drive"
+    )
     response: str = Field(default="", description="Direct reply if chat, empty if research")
     language: str = Field(default="en", description="Detected language of the message")
+
+
+# ─────────────────────────────────────────────
+# Proposed Action — option đề xuất cho user (human-in-the-loop)
+# ─────────────────────────────────────────────
+
+class ProposedAction(BaseModel):
+    """Một option deliverable đề xuất cho user sau khi research xong."""
+    action_id: str = Field(..., description="ID ngắn để user chọn, vd: 'create_pdf'")
+    label: str = Field(..., description="Nhãn hiển thị trên UI, vd: 'Tạo tài liệu PDF'")
+    description: str = Field(default="", description="Mô tả ngắn kết quả khi chọn")
+    action_type: Literal["create_document", "create_diagram", "notify", "upload_drive", "none"] = Field(...)
+    formats: List[str] = Field(default_factory=list, description="Định dạng: markdown/pdf/docx")
 
 
 # ─────────────────────────────────────────────

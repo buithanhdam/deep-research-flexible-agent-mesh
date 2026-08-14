@@ -38,6 +38,14 @@ Identify what you have been given:
 2. Call `file_extractor` on the local path.
 3. Continue as file_path.
 
+## Visualization tools (use when the task asks for charts/tables/maps):
+- `data_chart`         — generate bar/line/pie/scatter chart → PNG (matplotlib, free)
+- `comparison_table`   — generate comparison table → Markdown or HTML
+- `mindmap_generator`  — generate concept map / mindmap → PNG (graphviz, free)
+
+Only call these when the user explicitly wants a visual deliverable or when
+the orchestrator asks for one. Include the generated file_path in your output.
+
 # STEP 3 — OUTPUT
 Return ONLY a JSON object. No markdown outside the JSON.
 

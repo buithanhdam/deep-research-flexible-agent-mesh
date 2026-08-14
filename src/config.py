@@ -30,6 +30,12 @@ class Config:
     LARK_APP_ID: Optional[str] = os.environ.get("LARK_APP_ID")
     LARK_APP_SECRET: Optional[str] = os.environ.get("LARK_APP_SECRET")
     LARK_ERROR_CHAT_ID: Optional[str] = os.environ.get("LARK_ERROR_CHAT_ID")  # Chat ID for error notifications
+    # Human-in-the-loop: tắt Lark notification mặc định để tránh duplicate với UI chat.
+    # Bật lại khi chạy headless (n8n / cron) và cần nhận kết quả qua Lark.
+    LARK_NOTIFICATION_ENABLED: bool = os.environ.get("LARK_NOTIFICATION_ENABLED", "false").lower() == "true"
+
+    # GitHub API (optional — tăng rate limit, không bắt buộc)
+    GITHUB_TOKEN: Optional[str] = os.environ.get("GITHUB_TOKEN")
     
     # Agent Configuration
     MAX_RETRIES: int = int(os.environ.get("MAX_RETRIES", "3"))

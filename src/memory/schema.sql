@@ -27,12 +27,30 @@ CREATE INDEX IF NOT EXISTS idx_chat_history_created ON chat_history(created_at);
 CREATE TABLE IF NOT EXISTS workflow_states (
     id BIGSERIAL PRIMARY KEY,
     workflow_id VARCHAR(100) UNIQUE NOT NULL,
-    status VARCHAR(50) NOT NULL CHECK (status IN ('running', 'completed', 'failed', 'paused', 'escalated')),
+    status VARCHAR(50) NOT NULL CHECK (status IN (
+        'running', 'completed', 'failed', 'paused', 'escalated',
+        'awaiting_confirmation', 'generating'
+    )),
     current_step VARCHAR(200),
     context JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Migration: nới CHECK constraint cho DB đã tồn tại (idempotent)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'workflow_states_status_check'
+          AND table_name = 'workflow_states'
+    ) THEN
+        ALTER TABLE workflow_states DROP CONSTRAINT workflow_states_status_check;
+        ALTER TABLE workflow_states ADD CONSTRAINT workflow_states_status_check
+            CHECK (status IN ('running', 'completed', 'failed', 'paused', 'escalated',
+                              'awaiting_confirmation', 'generating'));
+    END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_workflow_states_id ON workflow_states(workflow_id);
 CREATE INDEX IF NOT EXISTS idx_workflow_states_status ON workflow_states(status);

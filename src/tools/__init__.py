@@ -13,6 +13,17 @@ from src.tools.diagram_generator_tool import DiagramGeneratorTool
 from src.tools.lark_send_message_tool import LarkSendMessageTool
 from src.tools.lark_file_tool import LarkFileDownloadTool, LarkFileUploadTool
 from src.tools.file_extractor_tool import FileExtractorTool
+from src.tools.arxiv_papers_tool import ArxivSearchTool
+from src.tools.hf_tool import HuggingFaceTool
+from src.tools.github_trending_tool import GitHubRepoTool
+from src.tools.wikipedia_tool import WikipediaTool
+from src.tools.news_search_tool import NewsSearchTool
+from src.tools.stackoverflow_tool import StackOverflowTool
+from src.tools.youtube_transcript_tool import YouTubeTranscriptTool
+from src.tools.code_snippet_tool import CodeSnippetTool
+from src.tools.data_chart_tool import DataChartTool
+from src.tools.comparison_table_tool import ComparisonTableTool
+from src.tools.mindmap_generator_tool import MindmapGeneratorTool
 
 __all__ = [
     "BaseTool",
@@ -30,4 +41,17 @@ __all__ = [
     "LarkFileDownloadTool",
     "LarkFileUploadTool",
     "FileExtractorTool",
+    # Research tools (free, no API key required)
+    "ArxivSearchTool",
+    "HuggingFaceTool",
+    "GitHubRepoTool",
+    "WikipediaTool",
+    "NewsSearchTool",
+    "StackOverflowTool",
+    "YouTubeTranscriptTool",
+    "CodeSnippetTool",
+    # Visualization & analysis tools (free)
+    "DataChartTool",
+    "ComparisonTableTool",
+    "MindmapGeneratorTool",
 ]

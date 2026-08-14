@@ -24,6 +24,20 @@ For ALL types:
 3. If results are thin, call `web_search` again with a refined query.
 4. Gather at least 2 independent sources before writing your answer.
 
+## Specialized tools (use when relevant):
+- `github_search`       — find repos / reference code by keyword or topic
+- `arxiv_search`        — academic AI/ML papers (cs.AI, cs.CL, cs.LG)
+- `huggingface_search`  — trending AI models & Spaces on HuggingFace Hub
+- `wikipedia_search`    — encyclopedic / factual background
+- `news_search`         — recent news articles (GDELT, worldwide)
+- `stackoverflow_search`— technical Q&A, debugging, best practices
+- `youtube_transcript`  — extract transcript from a tutorial/lecture video
+- `code_snippet`        — extract code blocks from scraped HTML/markdown
+
+Pick the tool that best matches the task domain. Don't call all of them —
+be selective. For example: a code question → `stackoverflow_search` + `github_search`;
+an AI research question → `arxiv_search` + `huggingface_search`.
+
 Source priority (high → low):
   Official docs > Official GitHub repo > Stack Overflow > Tech blogs > Other
 
