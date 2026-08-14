@@ -51,7 +51,14 @@ class OrchestratorAgent(BaseAgent):
             Dict with orchestration result
         """
         workflow_id = context.get("workflow_id") if context else None
-        max_rounds = config.AGENT_LOOP_MAX_ROUNDS  # Prevent infinite loops
+        # Tier-aware round limit — quick research shouldn't need many rounds
+        task_tier = context.get("task_tier") if context else None
+        if task_tier == "quick_research":
+            max_rounds = min(2, config.AGENT_LOOP_MAX_ROUNDS)
+        elif task_tier == "deep_research":
+            max_rounds = min(3, config.AGENT_LOOP_MAX_ROUNDS)
+        else:
+            max_rounds = config.AGENT_LOOP_MAX_ROUNDS  # multi_domain or default
         all_results = []
         
         for round_num in range(max_rounds):

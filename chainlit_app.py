@@ -70,9 +70,14 @@ async def on_chat_start():
 async def on_proposed_action(action: cl.Action):
     """Handle a proposed-action button click — resume the paused workflow.
 
-    action.value encodes: "resume::<workflow_id>::<action_id>"
+    action.payload encodes: {"data": "resume::<workflow_id>::<action_id>"}
     """
-    value = action.value or ""
+    # payload can be a dict or a string depending on Chainlit version
+    payload = action.payload or ""
+    if isinstance(payload, dict):
+        value = payload.get("data", "")
+    else:
+        value = str(payload)
     parts = value.split("::")
 
     if len(parts) != 3 or parts[0] != "resume":

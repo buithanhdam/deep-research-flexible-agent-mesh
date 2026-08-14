@@ -118,8 +118,10 @@ def build_action_buttons(
         label = action.get("label", aid)
         desc = action.get("description", "")
         # Encode: "resume::<workflow_id>::<action_id>"
-        payload = f"resume::{workflow_id}::{aid}"
-        kwargs = {"name": label, "value": payload, "description": desc}
+        payload_str = f"resume::{workflow_id}::{aid}"
+        # Chainlit Action requires `payload` (not `value`).
+        # Some versions accept a dict, others a string — use dict for safety.
+        kwargs = {"name": label, "payload": {"data": payload_str}, "description": desc}
         if callback is not None:
             kwargs["callback"] = callback
         actions.append(_cl.Action(**kwargs))

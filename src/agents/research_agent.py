@@ -30,7 +30,10 @@ class ResearchAgent(BaseAgent):
         
         try:
             if self.tools:
-                raw = self._process_with_tools(messages, max_iterations=6)
+                # Tier-aware: fewer tool iterations for quick research
+                task_tier = (context or {}).get("task_tier", "")
+                max_iter = 3 if task_tier == "quick_research" else 6
+                raw = self._process_with_tools(messages, max_iterations=max_iter)
                 content = raw.get("content", "")
                 
                 # Nếu tools loop kết thúc nhưng content rỗng, yêu cầu LLM tổng hợp

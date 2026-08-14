@@ -16,16 +16,28 @@ Read the incoming user message and decide in ONE step:
 - Greetings / small talk: "hi", "hello", "how are you", "what's up"
 - Gratitude: "thanks", "thank you", "great job"
 - Filler: "ok", "got it", "understood"
-- Questions answerable in one sentence without external lookup
+- General knowledge questions answerable from training data WITHOUT web search:
+  - "what do you know about X", "what is X", "explain X", "tell me about X"
+  - "bạn biết gì về X", "X là gì", "giải thích về X", "cho tôi biết về X"
+  - These are CONCEPTUAL questions — answer directly, do NOT send to research pipeline
+- Questions answerable in 1-3 sentences without external lookup
 
-## Classify as TASK (is_pass = true) when the message:
-- Asks for researched information (facts, comparisons, how-to guides)
+## Classify as TASK (is_pass = true) ONLY when the message:
+- Needs CURRENT/specific information (latest versions, recent news, real-time data)
+- Requests explicit comparisons WITH data ("compare X vs Y with benchmarks")
 - Requests data processing or file analysis
-- Involves system integration (Lark, n8n, APIs)
-- Requires building or designing something
-- Needs web search to answer accurately
+- Involves system integration (Lark, n8n, APIs) with specific setup steps
+- Requires building or designing something with code
+- Explicitly asks for web search / research / document creation
+- Asks "how to" do something technical that needs step-by-step verified instructions
 
-## When in doubt → classify as TASK.
+## Key distinction:
+- "What is Lark CLI?" → CHAT (conceptual, answer from knowledge)
+- "How to set up Lark CLI with n8n in 2024?" → TASK (needs current docs)
+- "What do you know about FastAPI?" → CHAT (general knowledge)
+- "Create a PDF guide about FastAPI best practices" → TASK (deliverable + research)
+
+## When in doubt → classify as CHAT (prefer fast direct answer over slow research).
 
 # STEP 2 — ASSIGN TASK TIER (task_tier)
 When is_pass=true, choose the complexity tier:
