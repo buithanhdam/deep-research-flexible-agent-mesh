@@ -36,16 +36,24 @@ class PostgresClient:
     @contextmanager
     def get_connection(self):
         """Get a PostgreSQL connection context manager.
-        
+
+        Sets search_path to the configured schema (bingx_agent_mesh) so all
+        unqualified table/function names resolve there automatically.
+
         Yields:
             psycopg2 connection
         """
         if not self._available:
             raise RuntimeError("PostgreSQL client not initialized. Check configuration.")
-        
+
         conn = None
         try:
             conn = psycopg2.connect(self.dsn)
+            # Set search_path to the agent schema so queries don't need
+            # schema-qualified table names.
+            schema = getattr(config, "POSTGRES_SCHEMA", "bingx_agent_mesh")
+            with conn.cursor() as cur:
+                cur.execute(f'SET search_path TO {schema}, public;')
             yield conn
             conn.commit()
         except Exception as e:

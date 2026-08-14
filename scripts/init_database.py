@@ -43,6 +43,7 @@ def main():
         
         if success:
             print("\n✅ Database initialized successfully!")
+            print(f"\nSchema: {config.POSTGRES_SCHEMA}")
             print("\nCreated tables:")
             print("  - chat_history")
             print("  - workflow_states")

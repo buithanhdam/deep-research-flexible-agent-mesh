@@ -1,5 +1,13 @@
 -- Database schema for Memory Management System
 -- Compatible with PostgreSQL and Supabase
+-- All objects are created in schema "bingx_agent_mesh" to avoid conflicts
+-- with other applications sharing the same database.
+
+-- ============================================
+-- Schema setup
+-- ============================================
+-- CREATE SCHEMA IF NOT EXISTS bingx_agent_mesh;
+SET search_path TO bingx_agent_mesh, public;
 
 -- ============================================
 -- Chat History Table
@@ -44,6 +52,7 @@ BEGIN
         SELECT 1 FROM information_schema.table_constraints
         WHERE constraint_name = 'workflow_states_status_check'
           AND table_name = 'workflow_states'
+          AND table_schema = 'bingx_agent_mesh'
     ) THEN
         ALTER TABLE workflow_states DROP CONSTRAINT workflow_states_status_check;
         ALTER TABLE workflow_states ADD CONSTRAINT workflow_states_status_check

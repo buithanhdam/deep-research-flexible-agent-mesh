@@ -22,6 +22,8 @@ class Config:
     POSTGRES_USER: str = os.environ.get("POSTGRES_USER", "")
     POSTGRES_PASSWORD: str = os.environ.get("POSTGRES_PASSWORD", "")
     POSTGRES_DB: str = os.environ.get("POSTGRES_DB", "postgres")
+    # Schema riêng cho hệ multi-agent — tránh conflict với các app khác cùng DB
+    POSTGRES_SCHEMA: str = os.environ.get("POSTGRES_SCHEMA", "bingx_agent_mesh")
     
     # Logging
     LOG_LEVEL: str = os.environ.get("LOG_LEVEL", "INFO")

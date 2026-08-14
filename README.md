@@ -19,7 +19,7 @@
 - 📊 **Google Drive**: Upload/download with service account
 - 🔍 **Web Search**: Tavily API + DuckDuckGo fallback
 - 📄 **Document Generation**: MD/PDF/DOCX/Diagrams/Charts/Mindmaps
-- 💾 **PostgreSQL Persistence**: Full workflow & chat history (reuse existing tables)
+- 💾 **PostgreSQL Persistence**: Full workflow & chat history in schema `bingx_agent_mesh` (no extra tables)
 
 ---
 
@@ -110,6 +110,7 @@ POSTGRES_PORT=5432
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=your_password
 POSTGRES_DB=multi_agent_db
+POSTGRES_SCHEMA=bingx_agent_mesh  # Schema riêng, tránh conflict với app khác
 
 # ============================================
 # OPTIONAL (but recommended)
@@ -181,12 +182,6 @@ UI mở tại `http://localhost:8000`. Hỗ trợ:
 - Action buttons cho human-in-the-loop (click chọn deliverable)
 - Step-by-step agent execution visibility
 - Image inline (charts, mindmaps, diagrams)
-
-### Streamlit UI (legacy backup)
-
-```bash
-streamlit run streamlit_main.py
-```
 
 ### Management Scripts
 
@@ -455,6 +450,7 @@ if (match) {
 - ✅ Resume on error / awaiting confirmation
 - ✅ Performance analytics
 - ✅ Task state stored in `workflow_states.context` JSONB (no extra tables)
+- ✅ All objects in schema `bingx_agent_mesh` (configurable via `POSTGRES_SCHEMA`)
 
 ---
 
