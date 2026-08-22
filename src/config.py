@@ -13,7 +13,7 @@ class Config:
     
     # OpenRouter Configuration
     OPENROUTER_API_KEY: str = os.environ.get("OPENROUTER_API_KEY", "")
-    OPENROUTER_MODEL: str = os.environ.get("OPENROUTER_MODEL", "anthropic/claude-haiku-4.5")
+    OPENROUTER_MODEL: str = os.environ.get("OPENROUTER_MODEL", "z-ai/glm-5.1")
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     
     # Postgres
@@ -60,6 +60,11 @@ class Config:
     
     # Search API Configuration
     TAVILY_API_KEY: str = os.environ.get("TAVILY_API_KEY", "")
+
+    # Google Gemini Configuration (optional — for Search Grounding & alt LLM)
+    # google-genai SDK; Search Grounding is a native Gemini feature not available via OpenRouter.
+    GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "")
+    GEMINI_MODEL: str = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
     
     # Google Drive Configuration
     GOOGLE_DRIVE_ENABLED: bool = os.environ.get("GOOGLE_DRIVE_ENABLED", "false").lower() == "true"

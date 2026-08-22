@@ -204,7 +204,7 @@ class OpenRouterClient:
 _client: Optional[OpenRouterClient] = None
 
 
-def get_client() -> OpenRouterClient:
+def get_openrouter_client() -> OpenRouterClient:
     """Get or create OpenRouter client singleton."""
     global _client
     if _client is None:

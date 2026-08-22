@@ -2,6 +2,8 @@
 
 from src.tools.base_tool import BaseTool, ToolResult
 from src.tools.web_search_tool import WebSearchTool
+from src.tools.gemini_search_tool import GeminiSearchTool
+from src.tools.gemini_code_tool import GeminiCodeExecutionTool
 from src.tools.web_scrape_tool import WebScrapeTool
 from src.tools.json_processor_tool import JsonProcessorTool
 from src.tools.markdown_generator_tool import MarkdownGeneratorTool
@@ -29,6 +31,8 @@ __all__ = [
     "BaseTool",
     "ToolResult",
     "WebSearchTool",
+    "GeminiSearchTool",
+    "GeminiCodeExecutionTool",
     "WebScrapeTool",
     "JsonProcessorTool",
     "MarkdownGeneratorTool",

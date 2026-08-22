@@ -5,6 +5,7 @@ pydantic>=2.5.0,<3.0.0
 # LLM & AI
 tiktoken>=0.7.0
 openai>=1.7.0,<2.0.0  # OpenRouter API compatible
+google-genai==2.19.0  # Google Gemini SDK — Search Grounding (native, not via OpenRouter)
 
 # Database
 supabase>=2.4.5,<3.0.0  # Hỗ trợ httpx flex range

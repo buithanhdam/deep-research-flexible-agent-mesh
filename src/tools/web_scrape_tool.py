@@ -1,4 +1,7 @@
-"""Web scraping tool to extract content from URLs."""
+"""Web scraping tool to extract content from URLs.
+
+Fallback chain: Tavily Extract → Gemini URL Context → Traditional (BeautifulSoup).
+"""
 
 from typing import Dict, Any
 import os
@@ -40,7 +43,7 @@ Use this when you have a specific URL and need to read its full content."""
         }
     
     def execute(self, url: str, max_length: int = 10000) -> ToolResult:
-        """Scrape webpage content.
+        """Scrape webpage content with fallback: Tavily → Gemini URL Context → BS4.
         
         Args:
             url: URL to scrape
@@ -49,7 +52,7 @@ Use this when you have a specific URL and need to read its full content."""
         Returns:
             ToolResult with extracted content
         """
-        # Try Tavily extract first (cleaner extraction)
+        # 1. Try Tavily extract first (cleaner extraction)
         tavily_result = self._try_tavily_extract(url)
         if tavily_result:
             # Truncate if too long
@@ -65,10 +68,68 @@ Use this when you have a specific URL and need to read its full content."""
                 result=tavily_result,
                 metadata={"method": "tavily"}
             )
-        
-        # Fallback to traditional scraping
+
+        # 2. Fallback to Gemini URL Context (handles JS-rendered pages)
+        gemini_result = self._try_gemini_url_context(url, max_length)
+        if gemini_result:
+            logger.info(
+                "web_scrape_success", url=url, method="gemini_url_context",
+                length=len(gemini_result.get('content', '')),
+            )
+            return ToolResult(
+                success=True,
+                result=gemini_result,
+                metadata={"method": "gemini_url_context"}
+            )
+
+        # 3. Final fallback to traditional scraping (BeautifulSoup)
         logger.info("web_scrape_fallback", url=url, method="traditional")
         return self._traditional_scrape(url, max_length)
+
+    def _try_gemini_url_context(self, url: str, max_length: int) -> Dict[str, Any] | None:
+        """Try to extract content using Gemini's URL Context tool.
+
+        Handles JS-rendered pages that Tavily/BeautifulSoup can't process.
+        Returns None if Gemini is not configured or fails.
+        """
+        try:
+            if not config.GEMINI_API_KEY:
+                return None
+
+            from src.llm.gemini_client import get_gemini_client
+
+            client = get_gemini_client()
+            if client is None:
+                return None
+
+            extracted = client.url_context(
+                url=url,
+                instruction=(
+                    "Extract and return the full main text content of this page. "
+                    "Include the title. Exclude navigation, ads, and boilerplate."
+                ),
+            )
+
+            content = extracted.get("content", "")
+            if not content:
+                logger.warning("gemini_url_context_empty", url=url)
+                return None
+
+            # Truncate if too long
+            if len(content) > max_length:
+                content = content[:max_length] + "..."
+
+            return {
+                "url": url,
+                "title": "",  # Gemini URL context doesn't separate title
+                "content": content,
+                "description": "",
+                "length": len(content),
+            }
+
+        except Exception as e:
+            logger.warning("gemini_url_context_error", url=url, error=str(e))
+            return None
     
     def _try_tavily_extract(self, url: str) -> Dict[str, Any] | None:
         """Try to extract content using Tavily API.

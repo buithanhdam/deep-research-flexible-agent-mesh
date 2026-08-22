@@ -5,7 +5,7 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 import json
 
-from src.llm.openrouter_client import get_client
+from src.llm.openrouter_client import get_openrouter_client
 from src.memory.memory_manager import get_memory_manager
 from src.memory.models import AgentExecution
 from src.logger import get_logger
@@ -27,7 +27,7 @@ class BaseAgent(ABC):
             tools: List of tools available to this agent
         """
         self.name = name
-        self.llm = get_client()
+        self.llm = get_openrouter_client()
         self.memory = get_memory_manager()
         self.logger = get_logger(f"agent.{name}")
         self.tools = tools or []

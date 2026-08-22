@@ -23,7 +23,7 @@ from src.tools import (WebSearchTool, WebScrapeTool, JsonProcessorTool, Markdown
                      ArxivSearchTool, HuggingFaceTool, GitHubRepoTool,
                      WikipediaTool, NewsSearchTool, StackOverflowTool,
                      YouTubeTranscriptTool, CodeSnippetTool,
-                     DataChartTool, ComparisonTableTool, MindmapGeneratorTool)
+                     DataChartTool, ComparisonTableTool, MindmapGeneratorTool,GeminiCodeExecutionTool)
 from src.constants import (
     TIER_CHAT, TIER_QUICK_RESEARCH, TIER_DEEP_RESEARCH, TIER_MULTI_DOMAIN,
     DELIVERY_NONE, DELIVERY_DOCUMENT, DELIVERY_DIAGRAM, DELIVERY_NOTIFY, DELIVERY_UPLOAD,
@@ -112,6 +112,7 @@ def setup_orchestrator() -> OrchestratorAgent:
         DataChartTool(),         # matplotlib charts → PNG
         ComparisonTableTool(),   # comparison tables → MD/HTML
         MindmapGeneratorTool(),  # concept maps → PNG (graphviz)
+        GeminiCodeExecutionTool()
     ]
     data_agent = DataAgent(tools=data_tools)
     

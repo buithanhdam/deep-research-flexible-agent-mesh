@@ -1,4 +1,10 @@
-"""Web search tool with Tavily + DuckDuckGo fallback."""
+"""Web search tool with Tavily + Gemini Grounding + DuckDuckGo fallback chain.
+
+Fallback order:
+  1. Tavily API        (if TAVILY_API_KEY configured) — raw snippets
+  2. Gemini Grounding  (if GEMINI_API_KEY configured)  — synthesized answer + citations
+  3. DuckDuckGo        (free, no key)                   — raw snippets
+"""
 
 import random
 import time
@@ -12,7 +18,7 @@ logger = get_logger(__name__)
 
 
 class WebSearchTool(BaseTool):
-    """Search the web using Tavily API (with DuckDuckGo fallback)."""
+    """Search the web using Tavily → Gemini Grounding → DuckDuckGo fallback chain."""
     
     def __init__(self, name: str = None, description: str = None, target_domains: list = None, **config):
         """Initialize web search tool.
@@ -52,7 +58,7 @@ Returns: List of search results with title, url, content snippet."""
         }
     
     def execute(self, query: str, max_results: int = 5, **kwargs) -> ToolResult:
-        """Execute web search.
+        """Execute web search with fallback chain: Tavily → Gemini → DuckDuckGo.
         
         Args:
             query: Search query
@@ -61,15 +67,70 @@ Returns: List of search results with title, url, content snippet."""
         Returns:
             ToolResult with search results
         """
-        # Try Tavily first
+        # 1. Try Tavily first (raw snippets)
         if config.TAVILY_API_KEY:
             result = self._search_tavily(query, max_results)
             if result.success:
                 return result
-            logger.warning("tavily_failed_trying_duckduckgo", error=result.error)
-        
-        # Fallback to DuckDuckGo
+            logger.warning("tavily_failed_trying_gemini", error=result.error)
+
+        # 2. Fallback to Gemini Search Grounding (synthesized answer + citations)
+        if config.GEMINI_API_KEY:
+            result = self._search_gemini(query, max_results)
+            if result.success:
+                return result
+            logger.warning("gemini_failed_trying_duckduckgo", error=result.error)
+
+        # 3. Final fallback to DuckDuckGo (free, no key)
         return self._search_duckduckgo(query, max_results)
+
+    def _search_gemini(self, query: str, max_results: int) -> ToolResult:
+        """Search using Google Search Grounding via GeminiClient.
+
+        Returns a synthesized answer + citation sources, normalized to the same
+        result shape as Tavily/DuckDuckGo (list of {title, url, content}).
+        """
+        try:
+            from src.llm.gemini_client import get_gemini_client
+
+            client = get_gemini_client()
+            if client is None:
+                return ToolResult(
+                    success=False,
+                    error="GeminiClient not available — GEMINI_API_KEY not configured.",
+                )
+
+            grounded = client.search_grounding(
+                query=query,
+                max_citations=max_results,
+            )
+
+            answer = grounded.get("answer", "")
+            citations = grounded.get("citations", [])
+
+            if not answer and not citations:
+                return ToolResult(
+                    success=False,
+                    error="Gemini returned no answer and no grounding citations.",
+                )
+
+            return ToolResult(
+                success=True,
+                result={
+                    "query": query,
+                    "answer": answer,
+                    "results": citations,
+                    "source": "gemini_grounding",
+                },
+                metadata={
+                    "result_count": len(citations),
+                    "search_queries": grounded.get("queries", []),
+                },
+            )
+
+        except Exception as e:
+            logger.error("gemini_search_failed", error=str(e))
+            return ToolResult(success=False, error=str(e))
     
     def _search_tavily(self, query: str, max_results: int) -> ToolResult:
         """Search using Tavily API."""

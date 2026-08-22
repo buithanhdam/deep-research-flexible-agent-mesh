@@ -17,7 +17,8 @@
 - 💬 **Chainlit UI**: LLM-native chat interface with action buttons + step visibility
 - 📱 **Lark Integration**: Optional (tắt mặc định để tránh duplicate với UI)
 - 📊 **Google Drive**: Upload/download with service account
-- 🔍 **Web Search**: Tavily API + DuckDuckGo fallback
+- 🔍 **Web Search**: Tavily → Gemini Grounding → DuckDuckGo fallback chain
+- 🔎 **Gemini Native Tools**: Search Grounding (cited answers), URL Context (page extraction), Code Execution (sandbox Python)
 - 📄 **Document Generation**: MD/PDF/DOCX/Diagrams/Charts/Mindmaps
 - 💾 **PostgreSQL Persistence**: Full workflow & chat history in schema `bingx_agent_mesh` (no extra tables)
 
@@ -95,7 +96,7 @@ cp .env.example .env
 # REQUIRED
 # ============================================
 OPENROUTER_API_KEY=sk-or-v1-xxx
-OPENROUTER_MODEL=anthropic/claude-haiku-4.5
+OPENROUTER_MODEL=z-ai/glm-5.1
 TAVILY_API_KEY=tvly-xxx
 MAX_RETRIES=3
 TIMEOUT_SECONDS=120
@@ -115,6 +116,12 @@ POSTGRES_SCHEMA=bingx_agent_mesh  # Schema riêng, tránh conflict với app kh�
 # ============================================
 # OPTIONAL (but recommended)
 # ============================================
+
+# Google Gemini (Search Grounding — native Google feature, không qua OpenRouter)
+# Lấy key tại: https://aistudio.google.com/apikey
+# Khi cấu hình, WebSearchTool fallback chain: Tavily → Gemini Grounding → DuckDuckGo
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.1-flash-lite
 
 # Lark — tắt notification mặc định (tránh duplicate với UI chat)
 LARK_APP_ID=cli_xxx
@@ -293,8 +300,8 @@ Precheck Agent phân loại mỗi message theo 4 tier:
 
 | Category | Tools |
 |----------|-------|
-| **Search** | WebSearchTool (Tavily + DuckDuckGo), WebScrapeTool |
-| **Data** | JsonProcessorTool, FileExtractorTool (PDF/DOCX/TXT) |
+| **Search** | WebSearchTool (Tavily → Gemini Grounding → DuckDuckGo), GeminiSearchTool, WebScrapeTool (Tavily → Gemini URL Context → BS4) |
+| **Data** | JsonProcessorTool, FileExtractorTool (PDF/DOCX/TXT), GeminiCodeExecutionTool (sandbox Python) |
 | **Documents** | Markdown, PDF (WeasyPrint), DOCX (pypandoc), Diagrams (Graphviz) |
 | **Cloud** | Google Drive Upload/Download |
 | **Lark** | Send Message, File Upload/Download |
@@ -321,6 +328,92 @@ Precheck Agent phân loại mỗi message theo 4 tier:
 | `mindmap_generator` | graphviz | PNG concept map |
 
 > **Charts/images on prod**: matplotlib dùng `Agg` backend (non-interactive) → sinh PNG → Chainlit `cl.Image` / Streamlit `st.image` hiển thị inline. Hoàn toàn OK cho prod.
+
+---
+
+## 🔎 Gemini Native Tools (Search Grounding + URL Context + Code Execution)
+
+Gemini có 3 native tools **không có qua OpenRouter** — chỉ gọi được qua `google-genai` SDK. Tất cả được wrap trong `GeminiClient` (`src/llm/gemini_client.py`), mirror pattern `OpenRouterClient`.
+
+### 1. Search Grounding (`google_search`)
+
+Gemini tự search Google *trong lúc inference* và trả về:
+- **Synthesized answer** — câu trả lời đã tổng hợp
+- **Citations** — danh sách nguồn (title + url) từ Google Search
+- **Search queries** — các query thực tế Gemini đã dùng
+
+**Tool**: `GeminiSearchTool` → `GeminiClient.search_grounding()`
+
+**Fallback chain** trong `WebSearchTool`:
+
+| # | Provider | Khi nào | Trả về |
+|---|----------|---------|-------|
+| 1 | **Tavily** | `TAVILY_API_KEY` configured | Raw snippets |
+| 2 | **Gemini Grounding** | `GEMINI_API_KEY` configured | Synthesized answer + citations |
+| 3 | **DuckDuckGo** | Luôn (free, no key) | Raw snippets |
+
+### 2. URL Context (`url_context`)
+
+Gemini fetch & extract nội dung từ URL cụ thể — xử lý được **JS-rendered pages** mà Tavily/BeautifulSoup không cover được.
+
+**Tool**: tích hợp vào `WebScrapeTool` → `GeminiClient.url_context()`
+
+**Fallback chain** trong `WebScrapeTool`:
+
+| # | Provider | Khi nào | Trả về |
+|---|----------|---------|-------|
+| 1 | **Tavily Extract** | `TAVILY_API_KEY` configured | Clean extracted content |
+| 2 | **Gemini URL Context** | `GEMINI_API_KEY` configured | Extracted content (JS pages OK) |
+| 3 | **BeautifulSoup** | Luôn (free) | Traditional HTML parsing |
+
+### 3. Code Execution (`code_execution`)
+
+Gemini auto-viết và thực thi Python code trong **sandbox an toàn của Google** — không cần local Python execution environment.
+
+**Tool**: `GeminiCodeExecutionTool` → `GeminiClient.code_execution()`
+
+Use cases:
+- 📊 Tính toán, thống kê, phân tích dữ liệu
+- 📈 Xử lý CSV, data transformations
+- 🔢 Math operations phức tạp
+- 🧪 Code prototyping / verification
+
+Returns: `{answer, code, result}` — answer (giải thích), code (Python code Gemini viết), result (stdout output).
+
+### Kiến trúc tích hợp
+
+```
+Agent (OpenRouter / Claude / GLM)
+  → gọi tool (function call)
+    ├─ "gemini_search"        → GeminiClient.search_grounding()
+    ├─ "web_scrape"           → WebScrapeTool → GeminiClient.url_context() (fallback)
+    └─ "gemini_code_execution" → GeminiClient.code_execution()
+         ↓
+    google-genai SDK (src/llm/gemini_client.py)
+         ↓
+    Gemini native tools (google_search / url_context / code_execution)
+```
+
+`GeminiClient` methods:
+- `chat_completion()` — standard text generation (alternative LLM gateway)
+- `search_grounding()` — Google Search grounding (cited answers)
+- `url_context()` — extract content from specific URLs
+- `code_execution()` — run Python in Google sandbox
+- `get_gemini_client()` — singleton, returns `None` nếu chưa cấu hình `GEMINI_API_KEY`
+
+### Setup
+
+```bash
+# 1. Lấy API key miễn phí tại https://aistudio.google.com/apikey
+# 2. Thêm vào .env:
+GEMINI_API_KEY=your_key_here
+GEMINI_MODEL=gemini-2.5-flash  # hoặc gemini-2.5-pro
+
+# 3. Cài dependency:
+pip install google-genai
+```
+
+Không cấu hình `GEMINI_API_KEY`? Hệ thống tự bỏ qua tất cả Gemini native tools → fallback thẳng Tavily/DuckDuckGo/BeautifulSoup. Không break gì.
 
 ---
 
