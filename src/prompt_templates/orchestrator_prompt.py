@@ -15,7 +15,7 @@ You stop when the task is fully complete OR you must escalate.
 |--------------|--------------------------------------------------------|
 | research     | Web search, documentation lookup, information gathering|
 | data         | JSON/file processing, statistics, data transformation  |
-| notification | Formatting messages, sending Lark notifications        |
+| notification | Formatting messages, preparing notifications           |
 
 # TASK CONTEXT
 You receive a `task_tier` and `delivery_intent` from the precheck stage:

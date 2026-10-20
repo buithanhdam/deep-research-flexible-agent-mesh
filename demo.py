@@ -86,7 +86,7 @@ def demo_examples():
             }
         },
         {
-            "input": "How do I integrate Lark with n8n?",
+            "input": "How do I integrate n8n with external APIs?",
             "type": "Research",
             "output": {
                 "status": "completed",
@@ -95,7 +95,7 @@ def demo_examples():
                 "result": {
                     "summary": "Integration summary...",
                     "details": "Step-by-step guide...",
-                    "sources": ["docs.n8n.io", "larksuite.com"]
+                    "sources": ["docs.n8n.io"]
                 }
             }
         },
@@ -214,20 +214,20 @@ def demo_integration():
     print("\n🔗 n8n Integration:")
     print("""
 ┌──────────────┐
-│ Lark Message │
+│ Webhook Call │
 └──────┬───────┘
        │
        ▼
 ┌──────────────────────────────────────────┐
 │         n8n Workflow                     │
 │                                          │
-│  1. Lark Trigger                         │
+│  1. Webhook Trigger                      │
 │  2. Execute Command Node                 │
 │     └─ python -m src.main --task "..."  │
 │  3. Extract JSON                         │
 │     └─ Between @@JSON_START@@ markers   │
 │  4. If Decision                          │
-│     ├─ completed → Send to Lark         │
+│     ├─ completed → Webhook Response     │
 │     └─ escalated → Notify Admin         │
 └──────────────────────────────────────────┘
     """)

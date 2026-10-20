@@ -12,8 +12,6 @@ from src.tools.docx_generator_tool import DocxGeneratorTool
 from src.tools.google_drive_upload_tool import GoogleDriveUploadTool
 from src.tools.google_drive_download_tool import GoogleDriveDownloadTool
 from src.tools.diagram_generator_tool import DiagramGeneratorTool
-from src.tools.lark_send_message_tool import LarkSendMessageTool
-from src.tools.lark_file_tool import LarkFileDownloadTool, LarkFileUploadTool
 from src.tools.file_extractor_tool import FileExtractorTool
 from src.tools.arxiv_papers_tool import ArxivSearchTool
 from src.tools.hf_tool import HuggingFaceTool
@@ -41,9 +39,6 @@ __all__ = [
     "GoogleDriveUploadTool",
     "GoogleDriveDownloadTool",
     "DiagramGeneratorTool",
-    "LarkSendMessageTool",
-    "LarkFileDownloadTool",
-    "LarkFileUploadTool",
     "FileExtractorTool",
     # Research tools (free, no API key required)
     "ArxivSearchTool",

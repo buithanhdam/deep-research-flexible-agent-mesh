@@ -1,9 +1,10 @@
-"""Web search tool with Tavily + Gemini Grounding + DuckDuckGo fallback chain.
+"""Web search tool with Tavily + Exa + Gemini Grounding + DuckDuckGo fallback chain.
 
 Fallback order:
   1. Tavily API        (if TAVILY_API_KEY configured) — raw snippets
-  2. Gemini Grounding  (if GEMINI_API_KEY configured)  — synthesized answer + citations
-  3. DuckDuckGo        (free, no key)                   — raw snippets
+  2. Exa AI API        (if EXA_API_KEY configured)    — neural/keyword search, domain filter
+  3. Gemini Grounding  (if GEMINI_API_KEY configured)  — synthesized answer + citations
+  4. DuckDuckGo        (free, no key)                   — raw snippets
 """
 
 import random
@@ -18,7 +19,7 @@ logger = get_logger(__name__)
 
 
 class WebSearchTool(BaseTool):
-    """Search the web using Tavily → Gemini Grounding → DuckDuckGo fallback chain."""
+    """Search the web using Tavily → Exa → Gemini Grounding → DuckDuckGo fallback chain."""
     
     def __init__(self, name: str = None, description: str = None, target_domains: list = None, **config):
         """Initialize web search tool.
@@ -26,7 +27,7 @@ class WebSearchTool(BaseTool):
         Args:
             name: Custom tool name
             description: Custom description
-            target_domains: List of domains to restrict search (e.g., ['larksuite.com'])
+            target_domains: List of domains to restrict search (e.g., ['example.com'])
             **config: Additional config
         """
         super().__init__(name, description, target_domains=target_domains, **config)
@@ -58,7 +59,7 @@ Returns: List of search results with title, url, content snippet."""
         }
     
     def execute(self, query: str, max_results: int = 5, **kwargs) -> ToolResult:
-        """Execute web search with fallback chain: Tavily → Gemini → DuckDuckGo.
+        """Execute web search with fallback chain: Tavily → Exa → Gemini → DuckDuckGo.
         
         Args:
             query: Search query
@@ -72,17 +73,75 @@ Returns: List of search results with title, url, content snippet."""
             result = self._search_tavily(query, max_results)
             if result.success:
                 return result
-            logger.warning("tavily_failed_trying_gemini", error=result.error)
+            logger.warning("tavily_failed_trying_exa", error=result.error)
 
-        # 2. Fallback to Gemini Search Grounding (synthesized answer + citations)
+        # 2. Fallback to Exa AI (neural/keyword search)
+        if config.EXA_API_KEY:
+            result = self._search_exa(query, max_results)
+            if result.success:
+                return result
+            logger.warning("exa_failed_trying_gemini", error=result.error)
+
+        # 3. Fallback to Gemini Search Grounding (synthesized answer + citations)
         if config.GEMINI_API_KEY:
             result = self._search_gemini(query, max_results)
             if result.success:
                 return result
             logger.warning("gemini_failed_trying_duckduckgo", error=result.error)
 
-        # 3. Final fallback to DuckDuckGo (free, no key)
+        # 4. Final fallback to DuckDuckGo (free, no key)
         return self._search_duckduckgo(query, max_results)
+
+    def _search_exa(self, query: str, max_results: int) -> ToolResult:
+        """Search using Exa AI API (neural/keyword search)."""
+        try:
+            payload: Dict[str, Any] = {
+                "query": query,
+                "numResults": max_results,
+                "type": "auto",
+            }
+            if self.target_domains:
+                payload["includeDomains"] = self.target_domains
+
+            response = requests.post(
+                "https://api.exa.ai/search",
+                json=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "x-api-key": config.EXA_API_KEY,
+                },
+                timeout=30
+            )
+            response.raise_for_status()
+
+            data = response.json()
+
+            results = []
+            for item in data.get("results", []):
+                results.append({
+                    "title": item.get("title", ""),
+                    "url": item.get("url", ""),
+                    "content": item.get("text", "") or " ".join(item.get("highlights", [])),
+                    "score": item.get("score", 0)
+                })
+
+            if not results:
+                return ToolResult(success=False, error="Exa returned no results")
+
+            return ToolResult(
+                success=True,
+                result={
+                    "query": query,
+                    "answer": None,
+                    "results": results,
+                    "source": "exa"
+                },
+                metadata={"result_count": len(results)}
+            )
+
+        except Exception as e:
+            logger.error("exa_search_failed", error=str(e))
+            return ToolResult(success=False, error=str(e))
 
     def _search_gemini(self, query: str, max_results: int) -> ToolResult:
         """Search using Google Search Grounding via GeminiClient.

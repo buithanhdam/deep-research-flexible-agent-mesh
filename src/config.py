@@ -1,7 +1,7 @@
 """Configuration management for the multi-agent system."""
 
 import os
-from typing import Optional
+from typing import Optional, Dict
 from dotenv import load_dotenv
 from urllib.parse import quote_plus
 # Load environment variables
@@ -9,12 +9,26 @@ load_dotenv()
 
 
 class Config:
-    """Central configuration object."""
+    """Central configuration object for DRF Agent Mesh."""
     
-    # OpenRouter Configuration
+    # LLM Provider selection: openrouter | chatgpt | gemini | custom
+    LLM_PROVIDER: str = os.environ.get("LLM_PROVIDER", "gemini").lower()
+    
+    # OpenRouter Configuration (optional provider)
     OPENROUTER_API_KEY: str = os.environ.get("OPENROUTER_API_KEY", "")
     OPENROUTER_MODEL: str = os.environ.get("OPENROUTER_MODEL", "z-ai/glm-5.1")
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    
+    # ChatGPT / OpenAI Configuration (optional provider)
+    OPENAI_API_KEY: str = os.environ.get("OPENAI_API_KEY", "")
+    OPENAI_MODEL: str = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    
+    # Custom OpenAI-compatible provider (optional provider)
+    CUSTOM_LLM_BASE_URL: str = os.environ.get("CUSTOM_LLM_BASE_URL", "")
+    CUSTOM_LLM_API_KEY: str = os.environ.get("CUSTOM_LLM_API_KEY", "")
+    CUSTOM_LLM_MODEL: str = os.environ.get("CUSTOM_LLM_MODEL", "")
+    CUSTOM_LLM_NAME: str = os.environ.get("CUSTOM_LLM_NAME", "custom")
     
     # Postgres
     POSTGRES_HOST: str = os.environ.get("POSTGRES_HOST", "")
@@ -28,14 +42,6 @@ class Config:
     # Logging
     LOG_LEVEL: str = os.environ.get("LOG_LEVEL", "INFO")
     
-    # Lark Integration (optional)
-    LARK_APP_ID: Optional[str] = os.environ.get("LARK_APP_ID")
-    LARK_APP_SECRET: Optional[str] = os.environ.get("LARK_APP_SECRET")
-    LARK_ERROR_CHAT_ID: Optional[str] = os.environ.get("LARK_ERROR_CHAT_ID")  # Chat ID for error notifications
-    # Human-in-the-loop: tắt Lark notification mặc định để tránh duplicate với UI chat.
-    # Bật lại khi chạy headless (n8n / cron) và cần nhận kết quả qua Lark.
-    LARK_NOTIFICATION_ENABLED: bool = os.environ.get("LARK_NOTIFICATION_ENABLED", "false").lower() == "true"
-
     # GitHub API (optional — tăng rate limit, không bắt buộc)
     GITHUB_TOKEN: Optional[str] = os.environ.get("GITHUB_TOKEN")
     
@@ -60,6 +66,13 @@ class Config:
     
     # Search API Configuration
     TAVILY_API_KEY: str = os.environ.get("TAVILY_API_KEY", "")
+    EXA_API_KEY: str = os.environ.get("EXA_API_KEY", "")
+
+    # Search fallback chain: Tavily → Exa → Gemini Grounding → DuckDuckGo
+    # (DuckDuckGo luôn được thêm làm backup cuối vì không cần key)
+    SEARCH_ENGINE_CHAIN: Dict[str, list] = {
+        "default": ["tavily", "exa", "duckduckgo"],
+    }
 
     # Google Gemini Configuration (optional — for Search Grounding & alt LLM)
     # google-genai SDK; Search Grounding is a native Gemini feature not available via OpenRouter.
@@ -90,19 +103,44 @@ class Config:
         )
     @classmethod
     def validate(cls) -> bool:
-        """Validate required configuration."""
-        required_fields = [
-            ("OPENROUTER_API_KEY", cls.OPENROUTER_API_KEY),
-        ]
-        
+        """Validate required configuration (dynamic based on LLM_PROVIDER)."""
+        provider_requirements = {
+            "openrouter": [("OPENROUTER_API_KEY", cls.OPENROUTER_API_KEY)],
+            "chatgpt": [("OPENAI_API_KEY", cls.OPENAI_API_KEY)],
+            "gemini": [("GEMINI_API_KEY", cls.GEMINI_API_KEY)],
+            "custom": [
+                ("CUSTOM_LLM_API_KEY", cls.CUSTOM_LLM_API_KEY),
+                ("CUSTOM_LLM_BASE_URL", cls.CUSTOM_LLM_BASE_URL),
+            ],
+        }
+        required_fields = provider_requirements.get(
+            cls.LLM_PROVIDER,
+            provider_requirements["gemini"]  # Default fallback to Gemini
+        )
+
         missing = [field for field, value in required_fields if not value]
-        
+
         if missing:
             raise ValueError(f"Missing required configuration: {', '.join(missing)}")
-        
+
         return True
     
 
 
 # Create singleton instance
 config = Config()
+
+# Exa search engine configuration (uses EXA_API_KEY from .env)
+EXA_CONFIG: Dict[str, str] = {
+    "api_key": config.EXA_API_KEY,
+}
+
+# Tavily search engine configuration
+TAVILY_CONFIG: Dict[str, str] = {
+    "api_key": config.TAVILY_API_KEY,
+}
+
+# Brave search engine configuration (code giữ lại, không trong default chain)
+BRAVE_CONFIG: Dict[str, str] = {
+    "api_key": os.environ.get("BRAVE_API_KEY", ""),
+}

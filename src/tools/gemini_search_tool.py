@@ -7,7 +7,7 @@ a high-quality, real-time, cited answer rather than raw snippets to process manu
 
 This tool delegates to `GeminiClient.search_grounding()` (src/llm/gemini_client.py),
 keeping the google-genai SDK logic inside the LLM client layer — consistent with how
-`OpenRouterClient` is the single gateway for OpenRouter.
+`src.llm.llm_manager` is the single gateway for multi-provider LLM clients.
 
 Requires: `google-genai` SDK + `GEMINI_API_KEY` env var.
 Falls back gracefully (returns ToolResult(success=False)) if not configured.

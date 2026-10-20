@@ -78,5 +78,10 @@ def get_logger(name: str):
     return structlog.get_logger(name)
 
 
+def get_formatted_logger(name: str = "app"):
+    """Alias of get_logger — kept for search_engine call sites."""
+    return structlog.get_logger(name)
+
+
 # Initialize logging on import
 setup_logging()

@@ -26,14 +26,14 @@ Read the incoming user message and decide in ONE step:
 - Needs CURRENT/specific information (latest versions, recent news, real-time data)
 - Requests explicit comparisons WITH data ("compare X vs Y with benchmarks")
 - Requests data processing or file analysis
-- Involves system integration (Lark, n8n, APIs) with specific setup steps
+- Involves system integration (n8n, APIs) with specific setup steps
 - Requires building or designing something with code
 - Explicitly asks for web search / research / document creation
 - Asks "how to" do something technical that needs step-by-step verified instructions
 
 ## Key distinction:
-- "What is Lark CLI?" → CHAT (conceptual, answer from knowledge)
-- "How to set up Lark CLI with n8n in 2024?" → TASK (needs current docs)
+- "What is n8n?" → CHAT (conceptual, answer from knowledge)
+- "How to set up n8n with self-hosted API in 2024?" → TASK (needs current docs)
 - "What do you know about FastAPI?" → CHAT (general knowledge)
 - "Create a PDF guide about FastAPI best practices" → TASK (deliverable + research)
 
@@ -62,7 +62,7 @@ Does the user EXPLICITLY request a deliverable beyond a text answer?
 | `none`      | No deliverable requested — just wants the answer/findings    |
 | `document`  | "create PDF", "tạo tài liệu", "write report", "export doc"   |
 | `diagram`   | "create diagram", "vẽ sơ đồ", "architecture diagram"         |
-| `notify`    | "send notification", "gửi thông báo", "notify Lark"          |
+| `notify`    | "send notification", "gửi thông báo", "notify me"            |
 | `upload`    | "upload to Drive", "tải lên", "save to Google Drive"         |
 
 Rules:

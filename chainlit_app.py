@@ -1,4 +1,4 @@
-"""Chainlit chat UI for the Multi-Agent Task Decomposition System.
+"""Chainlit chat UI for the Agent System.
 
 Replaces streamlit_main.py with an LLM-native interface that supports:
   • Tier-based routing (chat / quick_research / deep_research / multi_domain)

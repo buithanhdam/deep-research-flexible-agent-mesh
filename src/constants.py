@@ -9,7 +9,6 @@ AGENT_NOTIFICATION = "notification"
 AGENT_ARCHITECT = "architect"
 
 # Sub-agent Names
-SUB_AGENT_LARK = "lark_research"
 SUB_AGENT_N8N = "n8n_research"
 SUB_AGENT_CODE = "code_architect"
 
@@ -30,7 +29,7 @@ DELIVERY_NONE = "none"                  # Chỉ cần câu trả lời / finding
 DELIVERY_DOCUMENT = "document"          # Yêu cầu rõ tạo tài liệu (PDF/MD/DOCX)
 DELIVERY_DIAGRAM = "diagram"            # Yêu cầu rõ tạo diagram
 DELIVERY_NOTIFY = "notify"              # Yêu cầu rõ gửi notification
-DELIVERY_UPLOAD = "upload"              # Yêu cầu rõ upload lên Drive/Lark
+DELIVERY_UPLOAD = "upload"              # Yêu cầu rõ upload lên Drive
 
 # Workflow Status (mở rộng cho human-in-the-loop gate)
 WORKFLOW_AWAITING_CONFIRMATION = "awaiting_confirmation"
@@ -59,6 +58,5 @@ MAX_SEARCH_RESULTS = 5
 MAX_EXTRACT_LENGTH = 10000  # characters
 
 # Domain Scopes for Tools
-DOMAIN_LARK = ["larksuite.com", "open.larksuite.com", "open.feishu.cn"]
 DOMAIN_N8N = ["n8n.io", "docs.n8n.io", "community.n8n.io"]
 DOMAIN_CODE = ["github.com", "stackoverflow.com", "pypi.org", "readthedocs.io"]

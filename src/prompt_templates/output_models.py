@@ -127,10 +127,8 @@ class NotificationContent(BaseModel):
 
 class NotificationOutput(BaseModel):
     notification: NotificationContent
-    channels: List[Literal["lark", "email"]] = Field(default_factory=lambda: ["lark"])
+    channels: List[Literal["chat", "email"]] = Field(default_factory=lambda: ["chat"])
     confidence: float = Field(..., ge=0.0, le=1.0)
-    lark_receive_id: Optional[str] = None
-    formatted_blocks: Optional[List[Any]] = None
 
 
 # ─────────────────────────────────────────────
@@ -146,10 +144,9 @@ class DocumentInfo(BaseModel):
 
 class UploadedFile(BaseModel):
     filename: str
-    service: Literal["google_drive", "lark"]
+    service: Literal["google_drive"]
     link: Optional[str] = None
     file_id: Optional[str] = None
-    file_key: Optional[str] = None
 
 
 class ArchitectPlan(BaseModel):
@@ -160,7 +157,6 @@ class ArchitectPlan(BaseModel):
     include_diagram: bool = False
     diagram_description: Optional[str] = None
     upload_to_drive: bool = True
-    notify_lark: bool = True
 
 
 class ArchitectSection(BaseModel):

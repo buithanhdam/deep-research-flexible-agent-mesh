@@ -5,7 +5,7 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 import json
 
-from src.llm.openrouter_client import get_openrouter_client
+from src.llm.llm_manager import get_llm_client
 from src.memory.memory_manager import get_memory_manager
 from src.memory.models import AgentExecution
 from src.logger import get_logger
@@ -19,15 +19,24 @@ logger = get_logger(__name__)
 class BaseAgent(ABC):
     """Base class for all agents."""
     
-    def __init__(self, name: str, tools: Optional[List[BaseTool]] = None):
+    def __init__(
+        self,
+        name: str,
+        tools: Optional[List[BaseTool]] = None,
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+    ):
         """Initialize base agent.
         
         Args:
             name: Agent name/identifier
             tools: List of tools available to this agent
+            provider: LLM provider override (openrouter | chatgpt | gemini | custom);
+                      None = dùng LLM_PROVIDER từ env, fail → fallback Gemini
+            model: Model override cho provider đã chọn
         """
         self.name = name
-        self.llm = get_openrouter_client()
+        self.llm = get_llm_client(provider=provider, model=model)
         self.memory = get_memory_manager()
         self.logger = get_logger(f"agent.{name}")
         self.tools = tools or []

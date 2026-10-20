@@ -32,7 +32,7 @@ Every agent classifies the incoming task before acting:
 |-----|---------|
 | `[RESEARCH]` | Lookup, information gathering |
 | `[TECHNICAL]` | API docs, SDK, version-specific queries |
-| `[INTEGRATION]` | Connecting systems (Lark ↔ n8n, etc.) |
+| `[INTEGRATION]` | Connecting systems (n8n ↔ APIs, webhooks, etc.) |
 | `[BUILD]` | Architecture, code generation |
 | `[DATA]` | Processing, transformation, statistics |
 | `[CHAT]` | Casual conversation — answered directly, not passed on |
@@ -87,10 +87,7 @@ so the LLM has the exact field names and types.
 Pass `target_domains` when instantiating `WebSearchTool` to restrict results:
 
 ```python
-# Lark-specific search
-WebSearchTool(name="lark_search", target_domains=["larksuite.com", "open.feishu.cn"])
-
-# n8n-specific search
+# Domain-scoped search
 WebSearchTool(name="n8n_search", target_domains=["n8n.io", "docs.n8n.io", "community.n8n.io"])
 
 # Code/library search

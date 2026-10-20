@@ -1,23 +1,23 @@
-# 🤖 Multi-Agent Task Decomposition System
+# 🤖 Deep Research Flexible Agent Mesh (DRF Agent Mesh)
 
-**Production-ready multi-agent system** với function calling, 26 tools, human-in-the-loop delivery gate, tier-based task routing, multi-round orchestration, và full memory management.
+**Flexible multi-agent deep research system** với multi-provider LLM (OpenRouter / ChatGPT / Gemini / Custom API), function calling, human-in-the-loop delivery gate, tier-based task routing, multi-round orchestration, và full memory management.
 
-> ✅ **Status**: Production Ready | Function Calling ✅ | 26 Tools ✅ | Human-in-the-Loop ✅ | Chainlit UI ✅ | Memory System ✅
+> ✅ **Status**: Production Ready | Multi-Provider LLM ✅ | Function Calling ✅ | Human-in-the-Loop ✅ | Chainlit UI ✅ | Memory System ✅
 
 ---
 
 ## ✨ Highlights
 
 - 🎯 **7 Specialized Agents** with automatic tool selection
-- 🛠️ **26 Production Tools**: Search, Research, Visualization, Document Gen, Lark, Google Drive
+- 🧩 **Multi-Provider LLM**: OpenRouter / ChatGPT / Gemini / Custom API — chọn qua `LLM_PROVIDER` env hoặc override runtime, fallback tự động về Gemini
+- 🛠️ **24 Production Tools**: Search, Research, Visualization, Document Gen, Google Drive
 - 🧑‍💻 **Human-in-the-Loop Delivery Gate**: Research xong → đề xuất options → user confirm mới tạo tài liệu
 - 📊 **Tier-Based Task Routing**: chat / quick_research / deep_research / multi_domain
 - 🔄 **Multi-Round Orchestration**: Auto evaluate & continue
 - 🧠 **3-Layer Memory**: Working/Short-term/Long-term with caching
 - 💬 **Chainlit UI**: LLM-native chat interface with action buttons + step visibility
-- 📱 **Lark Integration**: Optional (tắt mặc định để tránh duplicate với UI)
 - 📊 **Google Drive**: Upload/download with service account
-- 🔍 **Web Search**: Tavily → Gemini Grounding → DuckDuckGo fallback chain
+- 🔍 **Web Search**: Tavily → Exa AI → Gemini Grounding → DuckDuckGo fallback chain
 - 🔎 **Gemini Native Tools**: Search Grounding (cited answers), URL Context (page extraction), Code Execution (sandbox Python)
 - 📄 **Document Generation**: MD/PDF/DOCX/Diagrams/Charts/Mindmaps
 - 💾 **PostgreSQL Persistence**: Full workflow & chat history in schema `bingx_agent_mesh` (no extra tables)
@@ -28,8 +28,8 @@
 
 ```bash
 # 1. Clone & Setup
-git clone https://github.com/buithanhdam/agent-mesh-task-decomposition
-cd agent-mesh-task-decomposition
+git clone https://github.com/buithanhdam/deep-research-flexible-agent-mesh.git
+cd deep-research-flexible-agent-mesh
 python setup.py
 
 # 2. Configure .env (see Configuration section)
@@ -95,8 +95,13 @@ cp .env.example .env
 # ============================================
 # REQUIRED
 # ============================================
-OPENROUTER_API_KEY=sk-or-v1-xxx
-OPENROUTER_MODEL=z-ai/glm-5.1
+# LLM provider chính: openrouter | chatgpt | gemini | custom
+# Fail / thiếu key → tự fallback về Gemini
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=AIza-xxx
+GEMINI_MODEL=gemini-2.5-flash
+
+# Search (Tavily key dùng cho fallback chính)
 TAVILY_API_KEY=tvly-xxx
 MAX_RETRIES=3
 TIMEOUT_SECONDS=120
@@ -114,20 +119,24 @@ POSTGRES_DB=multi_agent_db
 POSTGRES_SCHEMA=bingx_agent_mesh  # Schema riêng, tránh conflict với app khác
 
 # ============================================
-# OPTIONAL (but recommended)
+# OPTIONAL — các provider khác (chọn qua LLM_PROVIDER)
 # ============================================
 
-# Google Gemini (Search Grounding — native Google feature, không qua OpenRouter)
-# Lấy key tại: https://aistudio.google.com/apikey
-# Khi cấu hình, WebSearchTool fallback chain: Tavily → Gemini Grounding → DuckDuckGo
-GEMINI_API_KEY=
-GEMINI_MODEL=gemini-3.1-flash-lite
+# OpenRouter (optional — multi-model aggregator)
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=z-ai/glm-5.1
 
-# Lark — tắt notification mặc định (tránh duplicate với UI chat)
-LARK_APP_ID=cli_xxx
-LARK_APP_SECRET=xxx
-LARK_ERROR_CHAT_ID=oc_xxx
-LARK_NOTIFICATION_ENABLED=false  # Bật true khi chạy headless (n8n/cron)
+# ChatGPT / OpenAI (optional)
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4o-mini
+
+# Custom OpenAI-compatible endpoint (optional — vLLM, Ollama, private API)
+CUSTOM_LLM_BASE_URL=
+CUSTOM_LLM_API_KEY=
+CUSTOM_LLM_MODEL=
+
+# Exa AI — neural search (optional, fallback thứ 2 sau Tavily)
+EXA_API_KEY=
 
 # GitHub API — tăng rate limit (optional, 60→5000 req/h)
 GITHUB_TOKEN=ghp_xxx
@@ -243,8 +252,6 @@ User Message
 └─────────────────────────┘
             ↓
       JSON Output → UI / n8n
-
-[On Error] → Lark Notification (if LARK_NOTIFICATION_ENABLED=true)
 ```
 
 ---
@@ -259,7 +266,6 @@ Hệ thống **không tự động tạo tài liệu** mỗi lần có task rese
    - 📝 Tạo tài liệu DOCX
    - 📊 Tạo sơ đồ kiến trúc
    - ☁️ Tạo PDF & upload Google Drive *(nếu Drive configured)*
-   - 💬 Gửi kết quả qua Lark *(nếu LARK_NOTIFICATION_ENABLED=true)*
    - ✅ Chỉ giữ kết quả research
 3. **User chọn** → pipeline **resume** workflow → tạo deliverable
 
@@ -272,7 +278,7 @@ from agent_flow import execute_confirmed_action
 
 result = execute_confirmed_action(
     workflow_id="uuid-from-previous-research",
-    action_id="create_pdf",  # or: create_docx, create_diagram, upload_drive, notify_lark, none
+    action_id="create_pdf",  # or: create_docx, create_diagram, upload_drive, none
     session_id="user123",
 )
 ```
@@ -300,11 +306,10 @@ Precheck Agent phân loại mỗi message theo 4 tier:
 
 | Category | Tools |
 |----------|-------|
-| **Search** | WebSearchTool (Tavily → Gemini Grounding → DuckDuckGo), GeminiSearchTool, WebScrapeTool (Tavily → Gemini URL Context → BS4) |
+| **Search** | WebSearchTool (Tavily → Exa → Gemini Grounding → DuckDuckGo), GeminiSearchTool, WebScrapeTool (Tavily → Gemini URL Context → BS4) |
 | **Data** | JsonProcessorTool, FileExtractorTool (PDF/DOCX/TXT), GeminiCodeExecutionTool (sandbox Python) |
 | **Documents** | Markdown, PDF (WeasyPrint), DOCX (pypandoc), Diagrams (Graphviz) |
 | **Cloud** | Google Drive Upload/Download |
-| **Lark** | Send Message, File Upload/Download |
 
 ### New Research Tools (8) — all free, no API key
 
@@ -424,9 +429,8 @@ Không cấu hình `GEMINI_API_KEY`? Hệ thống tự bỏ qua tất cả Gemin
 | **Precheck** | Classify chat/task + tier + delivery_intent | - |
 | **Orchestrator** | Multi-round coordination | - |
 | **Research** | Information gathering | WebSearch, WebScrape, FileExtract, Arxiv, HuggingFace, GitHub, Wikipedia, News, StackOverflow, YouTube, CodeSnippet (11) |
-| **Data** | Data processing + visualization | Json, FileExtract, DriveDownload, LarkDownload, DataChart, ComparisonTable, Mindmap (7) |
-| **Notification** | Lark messaging (optional) | LarkMessage, LarkUpload (2) |
-| **Architect** | Document generation | Markdown, PDF, DOCX, Diagram, DriveUpload, LarkUpload (6) |
+| **Data** | Data processing + visualization | Json, FileExtract, DriveDownload, DataChart, ComparisonTable, Mindmap (6) |
+| **Architect** | Document generation | Markdown, PDF, DOCX, Diagram, DriveUpload (5) |
 
 ---
 
@@ -501,7 +505,7 @@ Không cấu hình `GEMINI_API_KEY`? Hệ thống tự bỏ qua tất cả Gemin
 ### Basic Workflow
 
 ```
-Lark Trigger
+Webhook Trigger
     ↓
 Execute Command
   python main.py --task "{{ $json.message }}" --session-id "{{ $json.user_id }}"
@@ -510,10 +514,10 @@ Parse JSON (between @@JSON_START@@ and @@JSON_END@@)
     ↓
 If status == "completed"
     ↓
-Lark Send Message (results + Drive links)
+Webhook Response (results + Drive links)
 ```
 
-> **Note**: Khi chạy qua n8n (headless), bật `LARK_NOTIFICATION_ENABLED=true` để nhận kết quả qua Lark. Khi chạy qua UI, để `false` để tránh duplicate.
+> **Note**: Khi chạy qua n8n (headless), cấu hình delivery qua webhook/response theo `proposed_actions` trả về. Khi chạy qua UI, kết quả hiển thị trực tiếp trong chat.
 
 ### Parse JSON in n8n
 
@@ -573,12 +577,6 @@ python scripts/init_database.py
 which pandoc graphviz
 ```
 
-**Lark API errors**
-```bash
-# Verify credentials + notification enabled
-python -c "from src.integrations.lark_client import get_lark_client; get_lark_client()._get_tenant_access_token()"
-```
-
 **GitHub rate limited**
 ```bash
 # Set GITHUB_TOKEN in .env for higher limits (5000 req/h)
@@ -628,6 +626,6 @@ python main.py --task "Research latest multi-agent frameworks, compare LangGraph
 
 ### 4. Workflow Automation (headless)
 ```bash
-# LARK_NOTIFICATION_ENABLED=true for headless delivery
-python main.py --task "Monitor tech news about AI agents, create weekly summary PDF, send to Lark" --session-id cron_001
+# Kết quả trả về JSON (stdout / @@JSON_START@@ markers) — dùng cho webhook/automation
+python main.py --task "Monitor tech news about AI agents, create weekly summary PDF" --session-id cron_001
 ```

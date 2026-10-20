@@ -25,7 +25,6 @@ File này dùng để **theo dõi tiến độ thực tế của project qua cá
 - JsonProcessorTool, FileExtractorTool (PDF/DOCX/TXT)
 - Document generation: Markdown, PDF (WeasyPrint), DOCX (pypandoc), Diagrams (Graphviz)
 - Google Drive Upload/Download (service account)
-- Lark: Send Message (text/post), File Upload/Download, error notifications
 
 **Memory — 3 lớp, hoạt động đầy đủ**
 - Working memory (in-memory, chia sẻ context giữa agent trong 1 workflow)
@@ -46,7 +45,6 @@ Các mục dưới đây là cải tiến sau khi hệ thống đã production-r
 ### Version 1.1.0 — Sub-agents chuyên biệt
 **Mục tiêu**: Agent-as-tool pattern cho các domain cụ thể.
 
-- [ ] `src/agents/sub_agents/lark_research_agent.py`
 - [ ] `src/agents/sub_agents/n8n_workflow_research_agent.py`
 - [ ] `src/agents/sub_agents/code_architect_agent.py`
 - [ ] Orchestrator route task tới đúng sub-agent (mở rộng orchestrator_prompt.py)

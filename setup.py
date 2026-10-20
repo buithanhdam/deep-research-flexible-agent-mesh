@@ -84,9 +84,24 @@ def create_env_file():
         print("Please update it manually with your API keys")
         return True
     
-    env_template = """# OpenRouter Configuration (REQUIRED)
-OPENROUTER_API_KEY=your_api_key_here
-OPENROUTER_MODEL=anthropic/claude-3-5-sonnet
+    env_template = """# LLM Provider Selection
+# Provider chính: openrouter | chatgpt | gemini | custom (fallback tự động về Gemini)
+LLM_PROVIDER=gemini
+
+# Provider Keys (điền key cho provider bạn chọn)
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=z-ai/glm-5.1
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4o-mini
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash
+CUSTOM_LLM_BASE_URL=
+CUSTOM_LLM_API_KEY=
+CUSTOM_LLM_MODEL=
+
+# Search
+TAVILY_API_KEY=
+EXA_API_KEY=
 
 # Database Configuration (OPTIONAL - for Phase 2)
 
@@ -105,7 +120,7 @@ LOG_LEVEL=INFO
             f.write(env_template)
         
         print("\n✅ Created .env file")
-        print("⚠️  IMPORTANT: Update .env with your OPENROUTER_API_KEY")
+        print("⚠️  IMPORTANT: Update .env with your provider API key (LLM_PROVIDER + key)")
         return True
         
     except Exception as e:
@@ -162,10 +177,11 @@ def print_next_steps():
 1. Activate virtual environment:
    {activate_cmd}
 
-2. Update .env file with your OpenRouter API key:
-   OPENROUTER_API_KEY=your_actual_key_here
-   
-   Get API key at: https://openrouter.ai/
+2. Update .env file with your LLM provider key:
+   LLM_PROVIDER=gemini        # hoặc openrouter | chatgpt | custom
+   GEMINI_API_KEY=your_actual_key_here
+
+   Get API key at: https://aistudio.google.com/apikey
 
 3. Test the system:
    {python_cmd} test_system.py
@@ -207,7 +223,7 @@ def main():
     # Run tests (non-blocking)
     print("\n" + "="*60)
     print("⚠️  About to run tests...")
-    print("Tests will fail if OPENROUTER_API_KEY is not set")
+    print("Tests will fail if no LLM provider key is set (LLM_PROVIDER + matching key)")
     print("="*60)
     
     response = input("\nRun tests now? (y/N): ").strip().lower()

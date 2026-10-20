@@ -18,8 +18,7 @@ from src.memory.memory_manager import get_memory_manager
 # Import tools
 from src.tools import (WebSearchTool, WebScrapeTool, JsonProcessorTool, MarkdownGeneratorTool,
                        PDFGeneratorTool, DocxGeneratorTool, GoogleDriveUploadTool,
-                     GoogleDriveDownloadTool, DiagramGeneratorTool, LarkSendMessageTool,
-                     LarkFileDownloadTool, LarkFileUploadTool, FileExtractorTool,
+                     GoogleDriveDownloadTool, DiagramGeneratorTool, FileExtractorTool,
                      ArxivSearchTool, HuggingFaceTool, GitHubRepoTool,
                      WikipediaTool, NewsSearchTool, StackOverflowTool,
                      YouTubeTranscriptTool, CodeSnippetTool,
@@ -32,49 +31,6 @@ from src.constants import (
 from src.prompt_templates.output_models import ProposedAction
 
 logger = get_logger(__name__)
-
-
-def _send_error_to_lark(
-    workflow_id: str,
-    task: str,
-    error: str,
-    error_type: str = "",
-    agent: str = "",
-    traceback: str = ""
-) -> None:
-    """Send structured error notification to Lark."""
-    try:
-        from src.tools.lark_send_message_tool import LarkSendMessageTool
-        
-        # Truncate traceback — Lark có giới hạn message size
-        tb_snippet = traceback.strip().splitlines()
-        tb_short = "\n".join(tb_snippet[-10:]) if tb_snippet else "(no traceback)"
-        
-        msg = (
-            f"❌ Task Failed\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"Workflow : {workflow_id}\n"
-            f"Agent    : {agent or 'unknown'}\n"
-            f"Error    : {error_type}: {error}\n\n"
-            f"Task (preview):\n{task[:300]}\n\n"
-            f"Traceback (last 10 lines):\n{tb_short}"
-        )
-        
-        lark_tool = LarkSendMessageTool()
-        result = lark_tool.execute(
-            receive_id=config.LARK_ERROR_CHAT_ID,
-            message=msg,
-            msg_type="text"
-        )
-        
-        if not result.success:
-            logger.error("lark_error_notification_failed", error=result.error)
-        else:
-            logger.info("lark_error_notification_sent", workflow_id=workflow_id)
-            
-    except Exception as e:
-        # Tuyệt đối không raise ở đây
-        logger.error("lark_error_notification_exception", error=str(e))
 
 
 def setup_orchestrator() -> OrchestratorAgent:
@@ -107,7 +63,6 @@ def setup_orchestrator() -> OrchestratorAgent:
         JsonProcessorTool(),
         FileExtractorTool(),
         GoogleDriveDownloadTool(),
-        LarkFileDownloadTool(),
         # Visualization & analysis tools (free)
         DataChartTool(),         # matplotlib charts → PNG
         ComparisonTableTool(),   # comparison tables → MD/HTML
@@ -116,12 +71,8 @@ def setup_orchestrator() -> OrchestratorAgent:
     ]
     data_agent = DataAgent(tools=data_tools)
     
-    # Setup Notification Agent with Lark tools
-    notification_tools = [
-        LarkSendMessageTool(),
-        LarkFileUploadTool()
-    ]
-    notification_agent = NotificationAgent(tools=notification_tools)
+    # Setup Notification Agent (no tools — notification logic handled in UI/memory layer)
+    notification_agent = NotificationAgent(tools=[])
     
     # Setup Architect Agent with document generation tools
     architect_tools = [
@@ -130,7 +81,6 @@ def setup_orchestrator() -> OrchestratorAgent:
         DocxGeneratorTool(),
         GoogleDriveUploadTool(),
         DiagramGeneratorTool(),
-        LarkFileUploadTool()  # Upload to Lark
     ]
     architect_agent = ArchitectAgent(tools=architect_tools)
     
@@ -189,16 +139,6 @@ def _build_proposed_actions(task_tier: str) -> List["ProposedAction"]:
             formats=["markdown", "pdf"],
         ))
 
-    # Notify option chỉ hiện khi Lark notification đang bật
-    if config.LARK_NOTIFICATION_ENABLED:
-        actions.append(ProposedAction(
-            action_id="notify_lark",
-            label="💬 Gửi kết quả qua Lark",
-            description="Định dạng tóm tắt và gửi notification qua Lark.",
-            action_type="notify",
-            formats=[],
-        ))
-
     # Option "không tạo gì thêm" luôn có
     actions.append(ProposedAction(
         action_id="none",
@@ -248,20 +188,8 @@ def _execute_delivery(
     """
     logger.info("executing_delivery", workflow_id=workflow_id, delivery_intent=delivery_intent)
 
-    # Notify intent → chỉ chạy notification agent (nếu Lark đang bật)
+    # Notify intent → chạy notification agent
     if delivery_intent == DELIVERY_NOTIFY:
-        if not config.LARK_NOTIFICATION_ENABLED:
-            return {
-                "workflow_id": workflow_id,
-                "status": "completed",
-                "type": "research",
-                "confidence": orchestrator_result.get("confidence", 0.0),
-                "result": orchestrator_result.get("result", {}),
-                "documents": {},
-                "notification": {"skipped": True, "reason": "LARK_NOTIFICATION_ENABLED=false"},
-                "agent_details": orchestrator_result.get("agent_results", []),
-                "rounds": orchestrator_result.get("rounds_executed", 0),
-            }
         orchestrator = setup_orchestrator()
         notif_agent = orchestrator._agent_registry.get("notification")
         if notif_agent:
@@ -352,7 +280,6 @@ def execute_confirmed_action(
         "create_docx": DELIVERY_DOCUMENT,
         "create_diagram": DELIVERY_DIAGRAM,
         "upload_drive": DELIVERY_UPLOAD,
-        "notify_lark": DELIVERY_NOTIFY,
         "none": DELIVERY_NONE,
     }
     delivery_intent = action_map.get(action_id, DELIVERY_NONE)
@@ -590,17 +517,6 @@ def process_message(message: str, session_id: str = None) -> Dict[str, Any]:
                 traceback=tb
             )
 
-            # Send full error to Lark — chỉ khi LARK_NOTIFICATION_ENABLED=true
-            if config.LARK_NOTIFICATION_ENABLED and config.LARK_APP_ID and config.LARK_ERROR_CHAT_ID:
-                _send_error_to_lark(
-                    workflow_id=workflow_id,
-                    task=message,
-                    error=error_msg,
-                    error_type=error_type,
-                    agent=agent,
-                    traceback=tb
-                )
-
             return {
                 "workflow_id": workflow_id,
                 "status": "failed",
@@ -622,16 +538,6 @@ def process_message(message: str, session_id: str = None) -> Dict[str, Any]:
             error_type=type(e).__name__,
             traceback=full_tb
         )
-        
-        if config.LARK_NOTIFICATION_ENABLED and config.LARK_APP_ID and config.LARK_ERROR_CHAT_ID:
-            _send_error_to_lark(
-                workflow_id=workflow_id,
-                task=message,
-                error=str(e),
-                error_type=type(e).__name__,
-                agent="process_message",
-                traceback=full_tb
-            )
         
         return {
             "workflow_id": workflow_id,

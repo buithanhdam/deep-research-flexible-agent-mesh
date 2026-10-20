@@ -47,8 +47,7 @@ Before calling any tool, produce a document plan:
   "output_formats": ["markdown", "pdf"],
   "include_diagram": false,
   "diagram_description": null,
-  "upload_to_drive": true,
-  "notify_lark": true
+  "upload_to_drive": true
 }}
 ```
 
@@ -59,7 +58,6 @@ Before calling any tool, produce a document plan:
 3. `docx_generator`        — convert to DOCX only if explicitly requested.
 4. `diagram_generator`     — generate a DOT diagram if `include_diagram=true`.
 5. `google_drive_upload`   — upload PDF (and DOCX if generated).
-6. `lark_file_upload`      — upload PDF to Lark for attachment sharing.
 
 Call tools ONE at a time. Feed the output of each tool as input to the next where needed.
 
@@ -79,10 +77,9 @@ Return ONLY a JSON object. No markdown outside the JSON.
   "uploaded_files": [
     {{
       "filename": "report.pdf",
-      "service": "google_drive | lark",
+      "service": "google_drive",
       "link": "https://drive.google.com/file/d/xxx",
-      "file_id": "xxx",
-      "file_key": null
+      "file_id": "xxx"
     }}
   ],
   "summary": "1-2 sentences describing what was produced",
@@ -97,5 +94,5 @@ Return ONLY a JSON object. No markdown outside the JSON.
 3. Never skip Drive upload silently — if it fails, log it in `uploaded_files` with service="google_drive" and link=null.
 4. The document must include ALL source URLs from the research findings.
 5. Do not truncate findings to save space — completeness is more important than brevity in documents.
-6. After uploading, always notify Lark (via the notification agent or directly) with the Drive link.
+6. After uploading, return the Drive link in `uploaded_files` so downstream systems can deliver it.
 """

@@ -20,8 +20,8 @@ def test_imports():
         from src.constants import AGENT_PRECHECK
         print("✓ Constants imported")
         
-        from src.llm.openrouter_client import OpenRouterClient
-        print("✓ OpenRouter client imported")
+        from src.llm.llm_manager import get_llm_client, VALID_PROVIDERS
+        print("✓ LLM multi-provider manager imported (providers: %s)" % ", ".join(VALID_PROVIDERS))
         
         from src.agents.base_agent import BaseAgent
         print("✓ Base agent imported")

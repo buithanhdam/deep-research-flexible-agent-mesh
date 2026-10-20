@@ -1,4 +1,4 @@
-"""Notification Agent - prepares and sends Lark notifications."""
+"""Notification Agent - prepares and formats notifications for delivery."""
 
 from typing import Dict, Any, List, Optional
 
@@ -10,7 +10,7 @@ from src.prompt_templates.output_models import NotificationOutput
 
 
 class NotificationAgent(BaseAgent):
-    """Agent specialized in preparing and sending Lark notifications."""
+    """Agent specialized in preparing and formatting notifications."""
     
     def __init__(self, tools: Optional[List[BaseTool]] = None):
         """Initialize notification agent."""
