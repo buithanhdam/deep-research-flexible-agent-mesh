@@ -45,5 +45,12 @@ matplotlib>=3.8.0
 # Multi-source research (free, no API key)
 youtube-transcript-api>=0.6.2  # YouTube transcripts without API key
 
+# Media tools (STT / TTS / OCR)
+faster-whisper>=1.0.0,<1.3.0  # Whisper STT local (CTranslate2 — lightweight, no ffmpeg binary)
+huggingface-hub<2.0.0          # faster-whisper chưa tương thích hub 2.x (metadata_errors)
+av>=11.0.0                    # PyAV audio/video decode (mọi version — tool tự patch compat)
+edge-tts>=6.1.0                # TTS — Microsoft Edge voices (free, no API key)
+rapidocr-onnxruntime>=1.3.0   # RapidOCR — lightweight OCR (text detection + recognition)
+
 #chat ui
 chainlit>=1.3.0  # LLM-native chat UI (replaces streamlit for prod)

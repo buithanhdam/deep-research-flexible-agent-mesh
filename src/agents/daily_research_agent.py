@@ -21,6 +21,7 @@ from src.tools.news_search_tool import NewsSearchTool
 from src.tools.arxiv_papers_tool import ArxivSearchTool
 from src.tools.github_trending_tool import GitHubRepoTool
 from src.tools.hf_tool import HuggingFaceTool
+from src.tools.youtube_search_tool import YouTubeSearchTool
 from src.tools.google_drive_upload_tool import GoogleDriveUploadTool
 from src.logger import get_logger
 
@@ -53,6 +54,9 @@ The report MUST follow this exact structure:
 ## 📈 HuggingFace Trending Models
 (Top models with downloads/likes and links)
 
+## 🎬 YouTube Videos
+(List notable videos about AI/ML/agents with title, link, channel, views, and why it matters)
+
 Rules:
 - Use ONLY the data provided. Do not invent links or facts.
 - Every item must include its source URL as a markdown link.
@@ -62,7 +66,7 @@ Rules:
 """
 
 COLLECT_SOURCES = [
-    "news", "arxiv", "github", "huggingface",
+    "news", "arxiv", "github", "huggingface", "youtube",
 ]
 
 
@@ -75,6 +79,7 @@ class DailyResearchAgent(BaseAgent):
             ArxivSearchTool(),
             GitHubRepoTool(),
             HuggingFaceTool(),
+            YouTubeSearchTool(),
             GoogleDriveUploadTool(),
         ]
         super().__init__(AGENT_RESEARCH, tools=tools or default_tools)
@@ -152,6 +157,17 @@ class DailyResearchAgent(BaseAgent):
             if tool:
                 res = tool.execute(resource_type="both", sort="trending", limit=10)
                 raw["huggingface"] = res.result if res.success else {"error": res.error}
+
+        if "youtube" in sources:
+            tool = self._tool_by_name("youtube_search")
+            if tool:
+                res = tool.execute(
+                    query="AI OR LLM OR machine learning OR AI agents",
+                    max_results=10,
+                    order="date",
+                    published_after_days=2,
+                )
+                raw["youtube"] = res.result if res.success else {"error": res.error}
 
         logger.info("daily_research_collected", sources=list(raw.keys()), date=yesterday)
         return raw

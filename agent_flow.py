@@ -21,7 +21,8 @@ from src.tools import (WebSearchTool, WebScrapeTool, JsonProcessorTool, Markdown
                      GoogleDriveDownloadTool, DiagramGeneratorTool, FileExtractorTool,
                      ArxivSearchTool, HuggingFaceTool, GitHubRepoTool,
                      WikipediaTool, NewsSearchTool, StackOverflowTool,
-                     YouTubeTranscriptTool, CodeSnippetTool,
+                     YouTubeTranscriptTool, YouTubeSearchTool, CodeSnippetTool,
+                     SpeechToTextTool, TextToSpeechTool, OCRTool,
                      DataChartTool, ComparisonTableTool, MindmapGeneratorTool,GeminiCodeExecutionTool)
 from src.constants import (
     TIER_CHAT, TIER_QUICK_RESEARCH, TIER_DEEP_RESEARCH, TIER_MULTI_DOMAIN,
@@ -53,8 +54,12 @@ def setup_orchestrator() -> OrchestratorAgent:
         WikipediaTool(),         # Wikipedia encyclopedia
         NewsSearchTool(),        # GDELT news search
         StackOverflowTool(),     # Stack Overflow Q&A
-        YouTubeTranscriptTool(), # YouTube video transcripts
+        YouTubeTranscriptTool(), # YouTube video transcripts (free, no key)
+        YouTubeSearchTool(),     # YouTube Data API v3 — search video + stats
         CodeSnippetTool(),       # Extract code from scraped content
+        # Media tools (Task 3)
+        SpeechToTextTool(),      # Whisper STT — transcribe audio/video (auto LLM summary nếu dài)
+        OCRTool(),               # RapidOCR + Gemini vision fallback — extract text từ ảnh
     ]
     research_agent = ResearchAgent(tools=research_tools)
     
@@ -81,6 +86,7 @@ def setup_orchestrator() -> OrchestratorAgent:
         DocxGeneratorTool(),
         GoogleDriveUploadTool(),
         DiagramGeneratorTool(),
+        TextToSpeechTool(),      # edge-tts — tạo bản audio MP3 cho report
     ]
     architect_agent = ArchitectAgent(tools=architect_tools)
     

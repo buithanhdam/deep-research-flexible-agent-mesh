@@ -10,7 +10,7 @@
 
 - 🎯 **7 Specialized Agents** with automatic tool selection
 - 🧩 **Multi-Provider LLM**: OpenRouter / ChatGPT / Gemini / Custom API — chọn qua `LLM_PROVIDER` env hoặc override runtime, fallback tự động về Gemini
-- 🛠️ **24 Production Tools**: Search, Research, Visualization, Document Gen, Google Drive
+- 🛠️ **27 Production Tools**: Search, Research, Visualization, Document Gen, Google Drive, Media (STT/TTS/OCR/YouTube)
 - 🧑‍💻 **Human-in-the-Loop Delivery Gate**: Research xong → đề xuất options → user confirm mới tạo tài liệu
 - 📊 **Tier-Based Task Routing**: chat / quick_research / deep_research / multi_domain
 - 🔄 **Multi-Round Orchestration**: Auto evaluate & continue
@@ -20,6 +20,8 @@
 - 🔍 **Web Search**: Tavily → Exa AI → Gemini Grounding → DuckDuckGo fallback chain
 - 🔎 **Gemini Native Tools**: Search Grounding (cited answers), URL Context (page extraction), Code Execution (sandbox Python)
 - 📄 **Document Generation**: MD/PDF/DOCX/Diagrams/Charts/Mindmaps
+- 🎬 **Media Tools**: YouTube Data API v3, Whisper STT (auto LLM summary), edge-tts TTS, RapidOCR + Gemini vision fallback
+- 📅 **Daily Research Pipeline**: `/daily-research` (UI) hoặc `--daily-research` (CLI/cron) — news/arxiv/github/HF/youtube → report → Drive
 - 💾 **PostgreSQL Persistence**: Full workflow & chat history in schema `bingx_agent_mesh` (no extra tables)
 
 ---
@@ -138,6 +140,13 @@ CUSTOM_LLM_MODEL=
 # Exa AI — neural search (optional, fallback thứ 2 sau Tavily)
 EXA_API_KEY=
 
+# YouTube Data API v3 (Google Cloud — enable "YouTube Data API v3")
+YOUTUBE_API_KEY=
+
+# Media tools (optional)
+WHISPER_MODEL=base            # Whisper STT: tiny|base|small|medium|large-v3
+TTS_VOICE=en-US-AriaNeural    # edge-tts voice (vi-VN-HoaiMyNeural cho tiếng Việt)
+
 # GitHub API — tăng rate limit (optional, 60→5000 req/h)
 GITHUB_TOKEN=ghp_xxx
 
@@ -186,6 +195,9 @@ python main.py --task "How to build a REST API with FastAPI?" --session-id user1
 
 # Explicit document request (auto-tạo, không cần confirm)
 python main.py --task "Research multi-agent systems, create PDF guide, upload to Google Drive" --session-id project_001
+
+# Daily research pipeline (cron/automation — collect → report → upload Drive)
+python main.py --daily-research --session-id cron_001
 ```
 
 ### Chainlit UI (recommended)
@@ -198,6 +210,7 @@ UI mở tại `http://localhost:8000`. Hỗ trợ:
 - Action buttons cho human-in-the-loop (click chọn deliverable)
 - Step-by-step agent execution visibility
 - Image inline (charts, mindmaps, diagrams)
+- `/daily-research` — chạy daily research pipeline ngay trong chat (report hiển thị inline + link Drive)
 
 ### Management Scripts
 
@@ -234,7 +247,7 @@ User Message
 ┌───────┬────────┬────────┐
 │Research│ Data   │ Notif. │
 │ Agent  │ Agent  │ Agent  │
-│11 tools│7 tools │2 tools │
+│14 tools│7 tools │0 tools │
 └───────┴────────┴────────┘
             ↓
 ┌─────────────────────────┐
@@ -300,7 +313,7 @@ Precheck Agent phân loại mỗi message theo 4 tier:
 
 ---
 
-## 🛠️ Tools (26)
+## 🛠️ Tools (27)
 
 ### Original Tools (15)
 
@@ -323,6 +336,15 @@ Precheck Agent phân loại mỗi message theo 4 tier:
 | `stackoverflow_search` | Stack Exchange API | Không cần |
 | `youtube_transcript` | youtube-transcript-api | **Không cần** (scrape trực tiếp) |
 | `code_snippet` | Regex extraction | Không cần |
+
+### Media Tools (4) — Task 3
+
+| Tool | Engine | API Key | Notes |
+|------|--------|---------|-------|
+| `youtube_search` | YouTube Data API v3 | Optional `YOUTUBE_API_KEY` | Search video + stats (views/likes/duration), video & channel details. 10k units/day free |
+| `speech_to_text` | faster-whisper (local) | Không cần | Transcribe audio/video; transcript dài → tự chunk + summarize bằng LLM (multi-provider) |
+| `text_to_speech` | edge-tts (Microsoft voices) | Không cần | Text → MP3, 100+ voices (`TTS_VOICE` env), auto-split text dài |
+| `ocr` | RapidOCR → Gemini vision fallback | Gemini (optional) | RapidOCR (local, detection+recognition) cho ảnh chữ; ảnh phi văn bản (sinh vật, diagram) → tự fallback Gemini vision |
 
 ### New Visualization Tools (3) — all free
 
@@ -354,8 +376,9 @@ Gemini tự search Google *trong lúc inference* và trả về:
 | # | Provider | Khi nào | Trả về |
 |---|----------|---------|-------|
 | 1 | **Tavily** | `TAVILY_API_KEY` configured | Raw snippets |
-| 2 | **Gemini Grounding** | `GEMINI_API_KEY` configured | Synthesized answer + citations |
-| 3 | **DuckDuckGo** | Luôn (free, no key) | Raw snippets |
+| 2 | **Exa AI** | `EXA_API_KEY` configured | Neural search snippets |
+| 3 | **Gemini Grounding** | `GEMINI_API_KEY` configured | Synthesized answer + citations |
+| 4 | **DuckDuckGo** | Luôn (free, no key) | Raw snippets |
 
 ### 2. URL Context (`url_context`)
 
@@ -404,6 +427,7 @@ Agent (OpenRouter / Claude / GLM)
 - `search_grounding()` — Google Search grounding (cited answers)
 - `url_context()` — extract content from specific URLs
 - `code_execution()` — run Python in Google sandbox
+- `analyze_image()` — vision: OCR/extract info từ ảnh (LLM fallback cho OCRTool)
 - `get_gemini_client()` — singleton, returns `None` nếu chưa cấu hình `GEMINI_API_KEY`
 
 ### Setup
@@ -428,9 +452,10 @@ Không cấu hình `GEMINI_API_KEY`? Hệ thống tự bỏ qua tất cả Gemin
 |-------|---------|-------|
 | **Precheck** | Classify chat/task + tier + delivery_intent | - |
 | **Orchestrator** | Multi-round coordination | - |
-| **Research** | Information gathering | WebSearch, WebScrape, FileExtract, Arxiv, HuggingFace, GitHub, Wikipedia, News, StackOverflow, YouTube, CodeSnippet (11) |
-| **Data** | Data processing + visualization | Json, FileExtract, DriveDownload, DataChart, ComparisonTable, Mindmap (6) |
-| **Architect** | Document generation | Markdown, PDF, DOCX, Diagram, DriveUpload (5) |
+| **Research** | Information gathering | WebSearch, WebScrape, FileExtract, Arxiv, HuggingFace, GitHub, Wikipedia, News, StackOverflow, YouTubeTranscript, YouTubeSearch, CodeSnippet, SpeechToText, OCR (14) |
+| **Data** | Data processing + visualization | Json, FileExtract, DriveDownload, DataChart, ComparisonTable, Mindmap, GeminiCodeExecution (7) |
+| **Architect** | Document generation + audio | Markdown, PDF, DOCX, Diagram, DriveUpload, TextToSpeech (6) |
+| **DailyResearch** | Daily pipeline: collect → report → Drive | News, Arxiv, GitHub, HuggingFace, YouTubeSearch, DriveUpload (6) |
 
 ---
 

@@ -20,6 +20,10 @@ from src.tools.wikipedia_tool import WikipediaTool
 from src.tools.news_search_tool import NewsSearchTool
 from src.tools.stackoverflow_tool import StackOverflowTool
 from src.tools.youtube_transcript_tool import YouTubeTranscriptTool
+from src.tools.youtube_search_tool import YouTubeSearchTool
+from src.tools.speech_to_text_tool import SpeechToTextTool
+from src.tools.text_to_speech_tool import TextToSpeechTool
+from src.tools.ocr_tool import OCRTool
 from src.tools.code_snippet_tool import CodeSnippetTool
 from src.tools.data_chart_tool import DataChartTool
 from src.tools.comparison_table_tool import ComparisonTableTool
@@ -48,6 +52,11 @@ __all__ = [
     "NewsSearchTool",
     "StackOverflowTool",
     "YouTubeTranscriptTool",
+    "YouTubeSearchTool",
+    # Media tools (Whisper STT / edge-tts TTS / RapidOCR + LLM vision)
+    "SpeechToTextTool",
+    "TextToSpeechTool",
+    "OCRTool",
     "CodeSnippetTool",
     # Visualization & analysis tools (free)
     "DataChartTool",

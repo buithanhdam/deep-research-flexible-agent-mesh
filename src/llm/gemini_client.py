@@ -295,6 +295,58 @@ class GeminiClient:
         )
 
     # ------------------------------------------------------------------ #
+    # Vision (image analysis — OCR fallback for non-text images)
+    # ------------------------------------------------------------------ #
+    def analyze_image(
+        self,
+        image_bytes: bytes,
+        mime_type: str,
+        prompt: str,
+        temperature: float = 0.1,
+    ) -> Dict[str, Any]:
+        """Analyze an image with Gemini vision (OCR / description / extraction).
+
+        Used as LLM-OCR fallback: RapidOCR handles text-dense images well, but
+        for photos, diagrams, biology/scientific visuals Gemini vision extracts
+        far more meaningful information.
+
+        Args:
+            image_bytes: Raw image bytes.
+            mime_type: MIME type (image/png, image/jpeg, image/webp, image/gif).
+            prompt: What to extract/analyze from the image.
+            temperature: Low for factual extraction (default 0.1).
+
+        Returns:
+            Dict with keys:
+              - content: str — Gemini's analysis of the image
+              - model: str
+        """
+        from google.genai import types
+
+        logger.info("gemini_vision_request", mime_type=mime_type, bytes=len(image_bytes))
+
+        retrying = retry(
+            stop=stop_after_attempt(config.MAX_RETRIES),
+            wait=wait_exponential(multiplier=1, min=2, max=10),
+            reraise=True,
+        )
+
+        def _vision_request():
+            part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+            gen_config = types.GenerateContentConfig(temperature=temperature)
+            return self._client.models.generate_content(
+                model=self.model,
+                contents=[part, prompt],
+                config=gen_config,
+            )
+
+        response = retrying(_vision_request)()
+        content = self._extract_text(response)
+
+        logger.info("gemini_vision_success", length=len(content))
+        return {"content": content, "model": self.model}
+
+    # ------------------------------------------------------------------ #
     # Code Execution (native Gemini — sandbox Python execution)
     # ------------------------------------------------------------------ #
     def code_execution(

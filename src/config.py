@@ -74,6 +74,18 @@ class Config:
         "default": ["tavily", "exa", "gemini", "duckduckgo"],
     }
 
+    # YouTube Data API v3 (Google Cloud — enable "YouTube Data API v3", tạo API key)
+    # https://console.cloud.google.com/apis/library/youtube.googleapis.com
+    YOUTUBE_API_KEY: str = os.environ.get("YOUTUBE_API_KEY", "")
+
+    # Speech-to-Text (Whisper local — faster-whisper)
+    # Model: tiny | base | small | medium | large-v3 (default: base — cân bằng tốc độ/quality)
+    WHISPER_MODEL: str = os.environ.get("WHISPER_MODEL", "base")
+
+    # Text-to-Speech (edge-tts — free, no API key)
+    # Voice list: https://github.com/rany2/edge-tts (vd: en-US-AriaNeural, vi-VN-HoaiMyNeural)
+    TTS_VOICE: str = os.environ.get("TTS_VOICE", "en-US-AriaNeural")
+
     # Google Gemini Configuration (optional — for Search Grounding & alt LLM)
     # google-genai SDK; Search Grounding is a native Gemini feature not available via OpenRouter.
     GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY", "")
