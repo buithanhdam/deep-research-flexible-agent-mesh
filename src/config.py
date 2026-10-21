@@ -71,7 +71,7 @@ class Config:
     # Search fallback chain: Tavily → Exa → Gemini Grounding → DuckDuckGo
     # (DuckDuckGo luôn được thêm làm backup cuối vì không cần key)
     SEARCH_ENGINE_CHAIN: Dict[str, list] = {
-        "default": ["tavily", "exa", "duckduckgo"],
+        "default": ["tavily", "exa", "gemini", "duckduckgo"],
     }
 
     # Google Gemini Configuration (optional — for Search Grounding & alt LLM)
@@ -138,9 +138,4 @@ EXA_CONFIG: Dict[str, str] = {
 # Tavily search engine configuration
 TAVILY_CONFIG: Dict[str, str] = {
     "api_key": config.TAVILY_API_KEY,
-}
-
-# Brave search engine configuration (code giữ lại, không trong default chain)
-BRAVE_CONFIG: Dict[str, str] = {
-    "api_key": os.environ.get("BRAVE_API_KEY", ""),
 }

@@ -57,7 +57,9 @@ async def on_chat_start():
             "- **Chat**: hỏi đáp nhanh → trả lời trực tiếp\n"
             "- **Quick research**: tra cứu → trả findings + đề xuất options\n"
             "- **Deep research**: nghiên cứu sâu → đề xuất deliverables để bạn chọn\n\n"
-            "Gõ yêu cầu của bạn bên dưới 👇"
+            "Gõ yêu cầu của bạn bên dưới 👇\n\n"
+            "💡 *Lệnh đặc biệt:* `/daily-research` — chạy pipeline nghiên cứu hằng ngày "
+            "(thu thập tin tức/arxiv/github/HF → sinh báo cáo → upload Google Drive)"
         ),
         author="assistant",
     ).send()
@@ -119,6 +121,32 @@ async def on_message(message: cl.Message):
     """Handle an incoming user message through the agent pipeline."""
     session_id = cl.user_session.get("session_id", "default")
     user_text = message.content
+
+    # ── Chat command: /daily-research ─────────────
+    if user_text.strip() == "/daily-research":
+        async with cl.Step(name="Daily Research Pipeline", type="run") as step:
+            step.input = "sources: news, arxiv, github, huggingface"
+            try:
+                from src.agents.daily_research_agent import DailyResearchAgent
+
+                agent = DailyResearchAgent()
+                result = agent.run(upload=True)
+            except Exception as e:
+                result = {"success": False, "error": str(e)}
+            step.output = "success" if result.get("success") else "error"
+
+        if result.get("success"):
+            content = "✅ **Daily research report generated.**\n\n"
+            if result.get("report_url"):
+                content += f"📄 [View on Google Drive]({result['report_url']})\n\n"
+            content += "---\n\n" + result.get("report", "")
+            await cl.Message(content=content, author="assistant").send()
+        else:
+            await cl.Message(
+                content=f"⚠️ Daily research pipeline failed: {result.get('error', 'unknown error')}",
+                author="assistant",
+            ).send()
+        return
 
     # Run the pipeline (sync call — wrapped in step for visibility)
     async with cl.Step(name="Agent Pipeline", type="run") as step:

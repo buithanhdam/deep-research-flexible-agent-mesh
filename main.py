@@ -77,18 +77,35 @@ def main():
     parser.add_argument(
         "--task",
         type=str,
-        required=True,
+        required=False,
         help="Task or message to process"
     )
-    
+
+    parser.add_argument(
+        "--daily-research",
+        action="store_true",
+        help="Run the daily IT/AI/ML research pipeline (collect sources, generate report, upload to Drive)"
+    )
+
     parser.add_argument(
         "--session-id",
         type=str,
         default=None,
         help="Session identifier for tracking conversation"
     )
-    
+
     args = parser.parse_args()
+
+    if args.daily_research:
+        from src.agents.daily_research_agent import DailyResearchAgent
+
+        agent = DailyResearchAgent()
+        result = agent.run(upload=True)
+        print_json_output(result)
+        sys.exit(0 if result.get("success") else 1)
+
+    if not args.task:
+        parser.error("--task is required unless --daily-research is used")
     
     # Validate configuration
     try:

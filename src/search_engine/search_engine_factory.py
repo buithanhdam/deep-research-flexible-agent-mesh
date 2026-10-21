@@ -14,7 +14,7 @@ Thiết kế rotation:
         sẽ bị DISABLE cho cả run (không thử lại từng lần search), chờ reset tháng
         hoặc gọi reset_circuit_breaker().
       * Capability promotion: tự sắp xếp order theo feature yêu cầu
-        (date range → ưu tiên Exa; country/lang → ưu tiên Brave/DDG; ...).
+        (date range → ưu tiên Exa; country/lang → ưu tiên DDG/Gemini; ...).
   - SearchEngineClient: wrapper tiện dùng cho search_tool các platform,
     tự build chain từ config theo tên platform.
 """
@@ -25,9 +25,9 @@ from src.logger import get_formatted_logger
 from src.config import config
 from src.search_engine.base_search_engine import BaseSearchEngine
 from src.search_engine.exa_search_engine import ExaSearchEngine
+from src.search_engine.gemini_search_engine import GeminiSearchEngine
 from src.search_engine.tavily_search_engine import TavilySearchEngine
 from src.search_engine.duckduckgo_search_engine import DuckDuckGoSearchEngine
-from src.search_engine.brave_search_engine import BraveSearchEngine
 from src.search_engine.errors import (
     SearchAuthError,
     SearchQuotaExceededError,
@@ -36,7 +36,7 @@ from src.search_engine.errors import (
 
 logger = get_formatted_logger()
 
-# Token `site:xxx` trong query string (Brave/DDG không có include_domains native
+# Token `site:xxx` trong query string (Gemini/DDG không có include_domains native
 # nên phải dính `site:` vào query; Exa/Tavily có native → sẽ được strip và truyền
 # qua include_domains).
 _SITE_RE = re.compile(r"site:\S+", re.IGNORECASE)
@@ -46,7 +46,7 @@ class SearchEngineType(Enum):
     """Enum cho các loại search engine đang được dùng"""
     TAVILY = "tavily"
     DUCKDUCKGO = "duckduckgo"
-    BRAVE = "brave"
+    GEMINI = "gemini"
     EXA = "exa"
 
 
@@ -55,9 +55,9 @@ class SearchEngineFactory:
 
     # Registry của các search engine classes (không còn Google PSE / Serper)
     _engines: Dict[SearchEngineType, type] = {
-        SearchEngineType.BRAVE: BraveSearchEngine,
         SearchEngineType.TAVILY: TavilySearchEngine,
         SearchEngineType.EXA: ExaSearchEngine,
+        SearchEngineType.GEMINI: GeminiSearchEngine,
         SearchEngineType.DUCKDUCKGO: DuckDuckGoSearchEngine,
     }
 
@@ -72,7 +72,7 @@ class SearchEngineFactory:
         Tạo search engine instance
 
         Args:
-            engine_type: Loại search engine (BRAVE, TAVILY, EXA, DUCKDUCKGO)
+            engine_type: Loại search engine (GEMINI, TAVILY, EXA, DUCKDUCKGO)
             api_key: API key cho engine
             **kwargs: Additional configuration cho engine cụ thể
 
@@ -100,7 +100,7 @@ class SearchEngineFactory:
         Tạo search engine từ string name
 
         Args:
-            engine_name: Tên engine ("brave", "tavily", "exa", "duckduckgo")
+            engine_name: Tên engine ("gemini", "tavily", "exa", "duckduckgo")
             api_key: API key
             **kwargs: Additional configuration
 
@@ -257,7 +257,7 @@ class MultiSearchEngine:
 
         - Engine có supports_domain_filter (Exa/Tavily):
             strip `site:xxx` khỏi query string và truyền include_domains native.
-        - Engine không có (Brave/DDG):
+        - Engine không có (Gemini/DDG):
             giữ `site:xxx` trong query, bỏ include_domains khỏi kwargs.
         """
         engine = self.engines[engine_name]
